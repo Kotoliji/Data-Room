@@ -19,7 +19,9 @@ interface ImportFilesModalProps {
 type ModalView = "main" | "drive"
 type FolderEntry = { id: string; name: string }
 
-export function ImportFilesModal({ isOpen, onClose, onApply, onImportDrive, folderId }: ImportFilesModalProps) {
+export function ImportFilesModal({ isOpen, onClose, onApply, onImportDrive, folderId: rawFolderId }: ImportFilesModalProps) {
+  // Normalize "All documents" to "all" for the backend
+  const folderId = rawFolderId === "All documents" ? "all" : rawFolderId
   const [files, setFiles] = useState<File[]>([])
   const [error, setError] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)

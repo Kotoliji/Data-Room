@@ -211,7 +211,13 @@ export function Layout() {
     if (res.error) {
       showToast(res.error)
     } else if (res.data) {
-      setUploadedFiles((prev) => [...res.data!.files, ...prev])
+      const importedFiles = res.data.files
+      const importedIds = new Set(importedFiles.map((f) => f.id))
+      // Replace existing entries (re-imported files may have updated folder_id)
+      setUploadedFiles((prev) => [
+        ...importedFiles,
+        ...prev.filter((f) => !importedIds.has(f.id)),
+      ])
       if (res.data.errors.length > 0) {
         showToast(`${res.data.errors.length} file(s) failed to import: ${res.data.errors.map((e) => e.name).join(", ")}`)
       }

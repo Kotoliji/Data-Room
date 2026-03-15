@@ -42,23 +42,22 @@ def import_from_drive(user: User, drive_file_id: str, drive_file_name: str,
                       folder_id: str = "all") -> File | None:
     """Download a file from Google Drive and save it locally."""
 
-    # Check if already imported
-    existing = File.query.filter_by(user_id=user.id, drive_file_id=drive_file_id).first()
-    if existing:
-        current_app.logger.info("File %s already imported as file %d", drive_file_id, existing.id)
-        return existing
-
     # Reject files that exceed the size limit (Google Docs have size=0, checked after download)
     if drive_size > MAX_FILE_SIZE:
         current_app.logger.warning("Drive file %s too large: %d bytes", drive_file_id, drive_size)
         return None
 
-    result = drive_download(user, drive_file_id)
-    if not result:
-        current_app.logger.error("Failed to download Drive file %s for user %s", drive_file_id, user.id)
-        return None
-
-    file_bytes, original_name = result
+    # Re-use bytes from existing copy if available, otherwise download
+    existing_any = File.query.filter_by(user_id=user.id, drive_file_id=drive_file_id).first()
+    if existing_any and Path(existing_any.path).exists():
+        file_bytes = Path(existing_any.path).read_bytes()
+        original_name = drive_file_name
+    else:
+        result = drive_download(user, drive_file_id)
+        if not result:
+            current_app.logger.error("Failed to download Drive file %s for user %s", drive_file_id, user.id)
+            return None
+        file_bytes, original_name = result
 
     # For Google Docs/Sheets/Slides, adjust name and mime_type
     mime_type = drive_mime_type
