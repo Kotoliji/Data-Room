@@ -45,10 +45,7 @@ def send_reset_email(to_email: str, reset_link: str) -> None:
 
     context = ssl.create_default_context()
     try:
-        with smtplib.SMTP("smtp.gmail.com", 587) as server:
-            server.ehlo()
-            server.starttls(context=context)
-            server.ehlo()
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context, timeout=10) as server:
             server.login(smtp_user, smtp_password)
             server.sendmail(smtp_user, to_email, msg.as_string())
         current_app.logger.warning("Reset email sent to %s", to_email)
