@@ -10,7 +10,7 @@ import { register, API_BASE } from "@/lib/api"
 
 export function CreateAccountForm() {
   const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [, setSearchParams] = useSearchParams()
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -21,13 +21,10 @@ export function CreateAccountForm() {
 
   // Prefill from signed Google registration token
   useEffect(() => {
-    const regToken = searchParams.get("google_reg")
+    const regToken = new URLSearchParams(window.location.search).get("google_reg")
     if (regToken) {
       setSearchParams({}, { replace: true })
-      const controller = new AbortController()
-      fetch(`${API_BASE}/api/v1/auth/google/verify?token=${encodeURIComponent(regToken)}`, {
-        signal: controller.signal,
-      })
+      fetch(`${API_BASE}/api/v1/auth/google/verify?token=${encodeURIComponent(regToken)}`)
         .then((res) => res.json())
         .then((res) => {
           if (res.data && typeof res.data.email === "string") {
@@ -38,12 +35,10 @@ export function CreateAccountForm() {
             setError("Verification expired. Please try again.")
           }
         })
-        .catch((err) => {
-          if (err.name !== "AbortError") setError("Failed to verify account.")
-        })
-      return () => controller.abort()
+        .catch(() => setError("Failed to verify account."))
     }
-  }, [searchParams, setSearchParams])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

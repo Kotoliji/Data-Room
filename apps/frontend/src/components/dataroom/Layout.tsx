@@ -332,6 +332,10 @@ export function Layout() {
         onTabChange={setActiveTab}
         onDeleteFolder={(folder) => {
           setUploadedFiles((prev) => prev.map((f) => f.folder_id === folder ? { ...f, folder_id: "Trash" } : f))
+          setAllUserFolders((prev) => prev.filter((f) => `folder:${f.id}` !== folder))
+        }}
+        onFolderCreated={(folder) => {
+          setAllUserFolders((prev) => [...prev, folder])
         }}
       />
 

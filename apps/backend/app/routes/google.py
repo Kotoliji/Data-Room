@@ -1,5 +1,5 @@
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
 from flask import Blueprint, Response, request, jsonify, current_app, redirect
@@ -81,7 +81,7 @@ def google_callback() -> Response:
     error = request.args.get("error")
     if error:
         current_app.logger.warning("Google OAuth denied: %s", error)
-        return redirect(f"{frontend_url}/?google_connected=false&error={error}")
+        return redirect(f"{frontend_url}/?google_connected=false&error={quote(error)}")
 
     code = request.args.get("code")
     state_raw = request.args.get("state", "")
@@ -258,12 +258,21 @@ def google_exchange() -> tuple[Response, int]:
     _purge_expired_codes()
     now = datetime.now(timezone.utc)
 
-    entry = _pending_google_auth.pop(code, None)
+    entry = _pending_google_auth.get(code)
     if not entry:
         return jsonify({"data": None, "error": "Invalid or expired code"}), 400
 
     if (now - entry["created_at"]).total_seconds() > _GOOGLE_CODE_MAX_AGE:
+        _pending_google_auth.pop(code, None)
         return jsonify({"data": None, "error": "Code expired"}), 400
+
+    # Mark as used — allow brief replay for React StrictMode double-calls
+    if not entry.get("used"):
+        entry["used"] = True
+        entry["used_at"] = now
+    elif (now - entry["used_at"]).total_seconds() > 5:
+        _pending_google_auth.pop(code, None)
+        return jsonify({"data": None, "error": "Code already used"}), 400
 
     return jsonify({"data": entry["data"], "error": None}), 200
 

@@ -61,11 +61,12 @@ interface SidebarProps {
   onMoveFile?: (fileId: number, folderId: string) => void
   onMoveFolder?: (folderId: number, targetFolderKey: string) => void
   onDeleteFolder?: (folder: string) => void
+  onFolderCreated?: (folder: FolderItem) => void
   activeTab?: string
   onTabChange?: (tab: string) => void
 }
 
-export function Sidebar({ isOpen, onClose, onFolderChange, activeFolder: activeFolderProp = "All documents", fileCounts = {}, onMoveFile, onMoveFolder, onDeleteFolder, activeTab = "Data Room", onTabChange }: SidebarProps) {
+export function Sidebar({ isOpen, onClose, onFolderChange, activeFolder: activeFolderProp = "All documents", fileCounts = {}, onMoveFile, onMoveFolder, onDeleteFolder, onFolderCreated, activeTab = "Data Room", onTabChange }: SidebarProps) {
   const isDesktop = useMediaQuery("(min-width: 768px)")
   const navigate = useNavigate()
 
@@ -126,6 +127,7 @@ export function Sidebar({ isOpen, onClose, onFolderChange, activeFolder: activeF
       setCustomFolders((prev) => [...prev, res.data!])
       const key = `folder:${res.data.id}`
       setActiveFolder(key)
+      onFolderCreated?.(res.data)
     }
     setNewFolderName("")
     setNewFolderColor("#3e90f0")
@@ -437,7 +439,7 @@ export function Sidebar({ isOpen, onClose, onFolderChange, activeFolder: activeF
                       />
                     </button>
                     {colorPickerOpen && (
-                      <div className="absolute left-0 bottom-full z-50 mb-1 flex gap-1 rounded-[10px] border border-[var(--dr-sidebar-border)] bg-[var(--dr-sidebar-bg)] p-1.5 shadow-lg">
+                      <div className="absolute left-full top-0 z-50 ml-1 flex flex-col gap-1 rounded-[10px] border border-[var(--dr-sidebar-border)] bg-[var(--dr-sidebar-bg)] p-1.5 shadow-lg">
                         {FOLDER_COLORS.map(color => (
                           <button
                             key={color}

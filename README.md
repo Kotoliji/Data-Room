@@ -6,6 +6,8 @@ A virtual Data Room MVP for securely storing and managing due diligence document
 
 ## How to Test
 
+**Live demo:** [https://AcmeCorp.app](https://AcmeCorp.app)
+
 A test account is pre-configured — no setup required.
 
 | | |
@@ -15,7 +17,7 @@ A test account is pre-configured — no setup required.
 
 ### Step-by-step
 
-1. Open the app and click **"Register"** to create a Data Room account (or use **"Sign in with Google"** with the account above)
+1. Open [https://AcmeCorp.app](https://AcmeCorp.app) and click **"Register"** to create a Data Room account (or use **"Sign in with Google"** with the account above)
 2. Inside the Data Room, click **"Import"** → **"Upload from Google Drive"**
 3. Connect Google Drive — sign in with `acmecorpsupport@gmail.com` / `acmecorpsupport999`
 4. Browse folders, select files with checkboxes, click **"Import"**

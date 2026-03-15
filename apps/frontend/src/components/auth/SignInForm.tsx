@@ -32,25 +32,23 @@ export function SignInForm() {
 
     if (googleCode) {
       setSearchParams({}, { replace: true })
-      let cancelled = false
       exchangeGoogleCode(googleCode).then((res) => {
-        if (cancelled) return
         if (res.data && typeof res.data.token === "string" && typeof res.data.id === "number") {
           const { token, ...user } = res.data
           localStorage.setItem("auth_token", token)
           localStorage.setItem("user", JSON.stringify(user))
-          navigate("/")
+          // Full page reload to reinitialize app state after login
+          window.location.href = "/"
         } else {
           setError(res.error || "Google login failed")
         }
-      })
-      return () => { cancelled = true }
+      }).catch(() => setError("Network error. Please try again."))
     } else if (googleError) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setError(GOOGLE_ERROR_MESSAGES[googleError] || `Google login error: ${googleError}`)
       setSearchParams({}, { replace: true })
     }
-  }, [searchParams, setSearchParams, navigate])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
