@@ -16,7 +16,10 @@ def create_app() -> Flask:
     if secret == "dev-secret-key":
         app.logger.warning("SECRET_KEY not set — using insecure default. Set it in .env!")
     app.config["SECRET_KEY"] = secret
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///dataroom.db"
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///dataroom.db")
+    # Render uses postgres:// but SQLAlchemy needs postgresql://
+    if app.config["SQLALCHEMY_DATABASE_URI"].startswith("postgres://"):
+        app.config["SQLALCHEMY_DATABASE_URI"] = app.config["SQLALCHEMY_DATABASE_URI"].replace("postgres://", "postgresql://", 1)
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SMTP_USER"] = os.environ.get("SMTP_USER", "")
     app.config["SMTP_PASSWORD"] = os.environ.get("SMTP_PASSWORD", "")
