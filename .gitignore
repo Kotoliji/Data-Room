@@ -1,0 +1,53 @@
+# Task documents (not part of the project)
+*.docx
+*.txt
+!apps/**/README.txt
+.docx_extract/
+
+# Claude Code
+.claude/
+apps/CLAUDE.md
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+
+# Environment files
+.env
+.env.local
+*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+
+# Database
+*.db
+*.sqlite3
+
+# File storage (imported files)
+apps/backend/storage/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
