@@ -201,7 +201,7 @@ export function Sidebar({ isOpen, onClose, onFolderChange, activeFolder: activeF
       className={cn(
         "relative z-[2] flex h-full shrink-0 flex-col justify-between overflow-hidden bg-[var(--dr-sidebar-bg)] font-[Inter,sans-serif]",
         // Desktop: visible, fixed width
-        "w-[280px] 3xl:w-[180px]"
+        "w-[320px] 3xl:w-[240px]"
       )}
     >
       {/* Top: logo + menus + folders */}
@@ -541,7 +541,7 @@ export function Sidebar({ isOpen, onClose, onFolderChange, activeFolder: activeF
         {/* Drawer panel */}
         <div
           className={cn(
-            "absolute inset-y-0 left-0 w-[min(280px,85vw)] transition-transform duration-300 ease-out",
+            "absolute inset-y-0 left-0 w-[min(320px,85vw)] transition-transform duration-300 ease-out",
             isOpen ? "translate-x-0" : "-translate-x-full"
           )}
         >

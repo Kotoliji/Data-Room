@@ -364,7 +364,7 @@ export function FileListView({
             {onCreateSubfolder && !isTrash && (
               <button
                 onClick={() => { setCreatingFolder(true); setNewFolderName("") }}
-                className="flex shrink-0 items-center gap-[6px] rounded-[12px] border-2 border-[#e8ecef] px-[8px] py-[6px] font-[Inter,sans-serif] text-[13px] font-semibold text-[#141718] transition-colors hover:bg-[#f3f5f7] md:px-[16px] md:py-[10px] md:text-[14px]"
+                className="flex shrink-0 items-center gap-[6px] rounded-[12px] border-2 border-white bg-white px-[8px] py-[6px] font-[Inter,sans-serif] text-[13px] font-semibold text-[#141718] transition-colors hover:bg-[#f3f5f7] md:px-[16px] md:py-[10px] md:text-[14px]"
               >
                 <FolderPlus className="size-[16px]" />
                 <span className="hidden md:inline">New folder</span>
