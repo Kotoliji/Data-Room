@@ -203,6 +203,10 @@ def move_file(user: User, file_id: int) -> tuple[Response, int]:
         return jsonify({"data": None, "error": "File not found"}), 404
 
     old_folder = record.folder_id
+    if folder_id == "Trash" and old_folder != "Trash":
+        record.original_folder_id = old_folder
+    elif folder_id != "Trash" and old_folder == "Trash":
+        record.original_folder_id = None
     record.folder_id = folder_id
     log_activity(user.id, "moved", record.original_name, folder_id=folder_id, details=f"from {old_folder} to {folder_id}")
     db.session.commit()

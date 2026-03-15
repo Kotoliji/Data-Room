@@ -81,6 +81,7 @@ export interface FolderItem {
   name: string
   color: string
   parent_id: number | null
+  status: string
   created_at: string | null
 }
 

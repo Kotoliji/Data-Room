@@ -11,7 +11,7 @@ def send_reset_email(to_email: str, reset_link: str) -> None:
     smtp_password = current_app.config.get("SMTP_PASSWORD", "")
 
     if not smtp_user or not smtp_password:
-        current_app.logger.debug(
+        current_app.logger.warning(
             "SMTP not configured. Reset link for %s: %s", to_email, reset_link
         )
         return
@@ -45,9 +45,12 @@ def send_reset_email(to_email: str, reset_link: str) -> None:
 
     context = ssl.create_default_context()
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.ehlo()
+            server.starttls(context=context)
+            server.ehlo()
             server.login(smtp_user, smtp_password)
             server.sendmail(smtp_user, to_email, msg.as_string())
-        current_app.logger.info("Reset email sent to %s", to_email)
-    except Exception:
-        current_app.logger.exception("Failed to send reset email to %s", to_email)
+        current_app.logger.warning("Reset email sent to %s", to_email)
+    except Exception as e:
+        current_app.logger.warning("Failed to send reset email to %s: %s", to_email, str(e))

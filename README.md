@@ -6,14 +6,14 @@ A virtual Data Room MVP for securely storing and managing due diligence document
 
 ## How to Test
 
-**Live demo:** [https://AcmeCorp.app](https://AcmeCorp.app)
+**Live demo:** [https://virtuous-presence-production-6468.up.railway.app/](https://virtuous-presence-production-6468.up.railway.app/)
 
 A test account is pre-configured — no setup required.
 
-| | |
-|---|---|
+|                    |                             |
+| ------------------ | --------------------------- |
 | **Google Account** | `acmecorpsupport@gmail.com` |
-| **Password** | `acmecorpsupport999` |
+| **Password**       | `acmecorpsupport999`        |
 
 ### Step-by-step
 
@@ -26,17 +26,17 @@ A test account is pre-configured — no setup required.
 
 ### Features to try
 
-| Feature | How |
-|---|---|
-| Import from Google Drive | Import button → Upload from Google Drive → select files |
-| View file in browser | Click the eye icon — PDFs and images open inline |
-| Delete file | Trash icon — removes from Data Room only, not from Google Drive |
-| Create folders | Sidebar "New folder" or button inside folder view |
-| Nested folders | Create folders inside folders, navigate with breadcrumbs |
-| Drag & drop | Drag files/folders between folders in the sidebar |
-| Search | Type in the search bar to filter by file name |
-| Activity log | Switch to "Activity" tab in sidebar |
-| Google Sign-In | Use the Google button on login/register pages |
+| Feature                  | How                                                             |
+| ------------------------ | --------------------------------------------------------------- |
+| Import from Google Drive | Import button → Upload from Google Drive → select files         |
+| View file in browser     | Click the eye icon — PDFs and images open inline                |
+| Delete file              | Trash icon — removes from Data Room only, not from Google Drive |
+| Create folders           | Sidebar "New folder" or button inside folder view               |
+| Nested folders           | Create folders inside folders, navigate with breadcrumbs        |
+| Drag & drop              | Drag files/folders between folders in the sidebar               |
+| Search                   | Type in the search bar to filter by file name                   |
+| Activity log             | Switch to "Activity" tab in sidebar                             |
+| Google Sign-In           | Use the Google button on login/register pages                   |
 
 ---
 
@@ -114,19 +114,19 @@ BACKEND_URL=http://localhost:5000
 
 ### Required
 
-| Requirement | Status | Implementation |
-|---|---|---|
-| Import files from Google Drive into Data Room | Done | Custom Drive file picker with folder navigation, search, pagination. Files download to server disk. |
-| View file list in UI | Done | File list with name, size, date. Organized by folders with drag & drop. |
-| Click on file to view in browser | Done | PDFs and images open inline. DOCX/XLSX download. Google Docs auto-convert to PDF. |
-| Delete a file (not in Google Drive) | Done | Deletes from Data Room and server disk only. Google Drive untouched. |
+| Requirement                                   | Status | Implementation                                                                                      |
+| --------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------- |
+| Import files from Google Drive into Data Room | Done   | Custom Drive file picker with folder navigation, search, pagination. Files download to server disk. |
+| View file list in UI                          | Done   | File list with name, size, date. Organized by folders with drag & drop.                             |
+| Click on file to view in browser              | Done   | PDFs and images open inline. DOCX/XLSX download. Google Docs auto-convert to PDF.                   |
+| Delete a file (not in Google Drive)           | Done   | Deletes from Data Room and server disk only. Google Drive untouched.                                |
 
 ### Optional (Extra Credit)
 
-| Requirement | Status | Implementation |
-|---|---|---|
-| Authentication layer | Done | Email/password registration + Google Sign-In. Session management with device tracking. |
-| Search and filtering | Done | Real-time search by file name within the current folder. |
+| Requirement          | Status | Implementation                                                                         |
+| -------------------- | ------ | -------------------------------------------------------------------------------------- |
+| Authentication layer | Done   | Email/password registration + Google Sign-In. Session management with device tracking. |
+| Search and filtering | Done   | Real-time search by file name within the current folder.                               |
 
 ### Beyond Requirements
 
@@ -157,6 +157,7 @@ Signed tokens (via `itsdangerous`) are used for OAuth state parameters and Googl
 ### Custom Drive File Picker
 
 Instead of using Google's off-the-shelf file picker, I built a custom picker that:
+
 - Navigates folders with breadcrumbs (just like Google Drive)
 - Supports search within Drive
 - Shows file icons, sizes, and dates
@@ -173,6 +174,7 @@ Each imported file stores its Google Drive `file_id`. Re-importing the same file
 ### Google Docs Handling
 
 Google Docs, Sheets, and Slides cannot be downloaded as-is (they have no binary content). The backend automatically exports them:
+
 - Documents → PDF
 - Spreadsheets → XLSX
 - Presentations → PDF
@@ -239,66 +241,71 @@ The application uses server-signed Bearer tokens for API authentication:
 ## API Reference
 
 ### Authentication
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/v1/auth/register` | Register with email/password |
-| `POST` | `/api/v1/auth/login` | Login with email/password |
-| `GET` | `/api/v1/auth/google/login` | Start Google Sign-In flow |
-| `GET` | `/api/v1/auth/me` | Get current user profile |
-| `PUT` | `/api/v1/auth/profile` | Update profile |
-| `GET` | `/api/v1/auth/sessions` | List active sessions |
+
+| Method | Endpoint                    | Description                  |
+| ------ | --------------------------- | ---------------------------- |
+| `POST` | `/api/v1/auth/register`     | Register with email/password |
+| `POST` | `/api/v1/auth/login`        | Login with email/password    |
+| `GET`  | `/api/v1/auth/google/login` | Start Google Sign-In flow    |
+| `GET`  | `/api/v1/auth/me`           | Get current user profile     |
+| `PUT`  | `/api/v1/auth/profile`      | Update profile               |
+| `GET`  | `/api/v1/auth/sessions`     | List active sessions         |
 
 ### Google Drive
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/v1/auth/google/connect` | Start Drive OAuth flow |
-| `GET` | `/api/v1/auth/google/status` | Check Drive connection status |
-| `GET` | `/api/v1/drive/files` | List Drive files (with search, pagination, folder nav) |
-| `POST` | `/api/v1/drive/import` | Import selected files into Data Room |
+
+| Method | Endpoint                      | Description                                            |
+| ------ | ----------------------------- | ------------------------------------------------------ |
+| `GET`  | `/api/v1/auth/google/connect` | Start Drive OAuth flow                                 |
+| `GET`  | `/api/v1/auth/google/status`  | Check Drive connection status                          |
+| `GET`  | `/api/v1/drive/files`         | List Drive files (with search, pagination, folder nav) |
+| `POST` | `/api/v1/drive/import`        | Import selected files into Data Room                   |
 
 ### File Management
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/v1/files/upload` | Upload files from computer |
-| `GET` | `/api/v1/files` | List Data Room files |
-| `GET` | `/api/v1/files/:id/view` | View/download file in browser |
-| `PUT` | `/api/v1/files/:id/rename` | Rename a file |
-| `PUT` | `/api/v1/files/:id/move` | Move file to another folder |
-| `DELETE` | `/api/v1/files/:id` | Delete file from Data Room |
+
+| Method   | Endpoint                   | Description                   |
+| -------- | -------------------------- | ----------------------------- |
+| `POST`   | `/api/v1/files/upload`     | Upload files from computer    |
+| `GET`    | `/api/v1/files`            | List Data Room files          |
+| `GET`    | `/api/v1/files/:id/view`   | View/download file in browser |
+| `PUT`    | `/api/v1/files/:id/rename` | Rename a file                 |
+| `PUT`    | `/api/v1/files/:id/move`   | Move file to another folder   |
+| `DELETE` | `/api/v1/files/:id`        | Delete file from Data Room    |
 
 ### Folders
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/v1/folders` | List folders (filterable by parent) |
-| `POST` | `/api/v1/folders` | Create a new folder |
-| `PUT` | `/api/v1/folders/:id` | Rename or move a folder |
-| `DELETE` | `/api/v1/folders/:id` | Delete folder and contents |
-| `GET` | `/api/v1/folders/:id/path` | Get breadcrumb path |
+
+| Method   | Endpoint                   | Description                         |
+| -------- | -------------------------- | ----------------------------------- |
+| `GET`    | `/api/v1/folders`          | List folders (filterable by parent) |
+| `POST`   | `/api/v1/folders`          | Create a new folder                 |
+| `PUT`    | `/api/v1/folders/:id`      | Rename or move a folder             |
+| `DELETE` | `/api/v1/folders/:id`      | Delete folder and contents          |
+| `GET`    | `/api/v1/folders/:id/path` | Get breadcrumb path                 |
 
 ### Activity
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/v1/activity` | Get activity log (filterable by folder) |
-| `DELETE` | `/api/v1/activity` | Clear activity log |
+
+| Method   | Endpoint           | Description                             |
+| -------- | ------------------ | --------------------------------------- |
+| `GET`    | `/api/v1/activity` | Get activity log (filterable by folder) |
+| `DELETE` | `/api/v1/activity` | Clear activity log                      |
 
 ---
 
 ## Edge Cases Handled
 
-| Scenario | Solution |
-|----------|----------|
-| Expired OAuth access token | Auto-refreshed using stored refresh token |
-| Revoked refresh token | User prompted to reconnect Google Drive |
-| Duplicate file import | Detected by `drive_file_id`, returns existing record |
-| Duplicate file names | Appends (1), (2), ..., up to (100), then UUID suffix |
-| Google Docs/Sheets/Slides | Auto-exported as PDF or XLSX |
-| File deleted from disk | Returns 404 with clear error message |
-| Google API unavailable | Returns 503, frontend shows toast notification |
-| File exceeds 50MB | Rejected client-side and server-side with message |
-| Unsupported file type | Skipped with reason shown in toast |
-| Account deletion | Cleans up files on disk, sessions, activity logs, localStorage |
-| Same email re-registration | localStorage data from previous account is cleared |
-| OAuth state tampering | Signed with `itsdangerous`, validated with 10-minute expiry |
+| Scenario                   | Solution                                                       |
+| -------------------------- | -------------------------------------------------------------- |
+| Expired OAuth access token | Auto-refreshed using stored refresh token                      |
+| Revoked refresh token      | User prompted to reconnect Google Drive                        |
+| Duplicate file import      | Detected by `drive_file_id`, returns existing record           |
+| Duplicate file names       | Appends (1), (2), ..., up to (100), then UUID suffix           |
+| Google Docs/Sheets/Slides  | Auto-exported as PDF or XLSX                                   |
+| File deleted from disk     | Returns 404 with clear error message                           |
+| Google API unavailable     | Returns 503, frontend shows toast notification                 |
+| File exceeds 50MB          | Rejected client-side and server-side with message              |
+| Unsupported file type      | Skipped with reason shown in toast                             |
+| Account deletion           | Cleans up files on disk, sessions, activity logs, localStorage |
+| Same email re-registration | localStorage data from previous account is cleared             |
+| OAuth state tampering      | Signed with `itsdangerous`, validated with 10-minute expiry    |
 
 ---
 
@@ -318,7 +325,7 @@ File
 ├── user_id, status, created_at
 
 Folder
-├── id, name, color
+├── id, name, color, status (active/trashed)
 ├── parent_id (self-ref, nullable — null = root level)
 ├── user_id, created_at
 

@@ -236,6 +236,18 @@ export function deleteFolder(folderId: number): Promise<ApiResponse<MessageRespo
   return request<MessageResponse>(`/folders/${folderId}`, { method: "DELETE" })
 }
 
+export function deleteFolderPermanent(folderId: number): Promise<ApiResponse<MessageResponse>> {
+  return request<MessageResponse>(`/folders/${folderId}/permanent`, { method: "DELETE" })
+}
+
+export function restoreFolder(folderId: number): Promise<ApiResponse<FolderItem>> {
+  return request<FolderItem>(`/folders/${folderId}/restore`, { method: "POST" })
+}
+
+export function getTrashedFolders(): Promise<ApiResponse<{ folders: FolderItem[] }>> {
+  return request<{ folders: FolderItem[] }>("/folders?status=trashed", { method: "GET" })
+}
+
 export function getFolderPath(folderId: number): Promise<ApiResponse<{ path: FolderItem[] }>> {
   return request<{ path: FolderItem[] }>(`/folders/${folderId}/path`, { method: "GET" })
 }

@@ -37,6 +37,33 @@ def create_app() -> Flask:
     with app.app_context():
         from app.models import User, Session  # noqa: F401
         db.create_all()
+        _run_migrations(app)
 
     app.logger.info("App created successfully")
     return app
+
+
+def _run_migrations(app: Flask) -> None:
+    """Run lightweight ALTER TABLE migrations for new columns."""
+    from sqlalchemy import inspect, text
+    inspector = inspect(db.engine)
+
+    # Add 'status' column to folders table
+    if "folders" in inspector.get_table_names():
+        columns = [c["name"] for c in inspector.get_columns("folders")]
+        if "status" not in columns:
+            db.session.execute(
+                text("ALTER TABLE folders ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'active'")
+            )
+            db.session.commit()
+            app.logger.info("Migration: added 'status' column to folders table")
+
+    # Add 'original_folder_id' column to files table
+    if "files" in inspector.get_table_names():
+        columns = [c["name"] for c in inspector.get_columns("files")]
+        if "original_folder_id" not in columns:
+            db.session.execute(
+                text("ALTER TABLE files ADD COLUMN original_folder_id VARCHAR(100)")
+            )
+            db.session.commit()
+            app.logger.info("Migration: added 'original_folder_id' column to files table")

@@ -55,6 +55,7 @@ class File(db.Model):
     path: str = db.Column(db.String(512), nullable=False)
     drive_file_id: str | None = db.Column(db.String(200), nullable=True)
     folder_id: str = db.Column(db.String(100), default="all")
+    original_folder_id: str | None = db.Column(db.String(100), nullable=True)
     user_id: int = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     status: str = db.Column(db.String(20), default="uploaded")
     created_at: datetime = db.Column(
@@ -85,6 +86,7 @@ class Folder(db.Model):
     color: str = db.Column(db.String(20), default="#3e90f0")
     parent_id: int | None = db.Column(db.Integer, db.ForeignKey("folders.id"), nullable=True)
     user_id: int = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    status: str = db.Column(db.String(20), default="active", nullable=False)
     created_at: datetime = db.Column(
         db.DateTime, default=lambda: datetime.now(timezone.utc)
     )
@@ -98,6 +100,7 @@ class Folder(db.Model):
             "name": self.name,
             "color": self.color,
             "parent_id": self.parent_id,
+            "status": self.status,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 

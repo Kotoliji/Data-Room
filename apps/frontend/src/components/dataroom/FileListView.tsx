@@ -1,8 +1,10 @@
-import { Check, Trash2, X, Pencil, Eye, Folder, ChevronRight, ChevronLeft, FolderPlus } from "lucide-react"
+import { Check, Trash2, X, Pencil, Eye, Folder, ChevronRight, ChevronLeft, FolderPlus, RotateCcw } from "lucide-react"
 import { useState, useRef, useCallback } from "react"
 import type { UploadedFile, FolderItem } from "@/lib/types"
 import { getFileViewUrl } from "@/lib/api"
 import { formatSize } from "@/lib/utils"
+import { DeleteFolderModal } from "./DeleteFolderModal"
+import { triggerTrashAnimation } from "./TrashAnimation"
 
 interface FileListViewProps {
   folderName: string
@@ -17,6 +19,7 @@ interface FileListViewProps {
   onNavigateUp?: () => void
   onCreateSubfolder?: (name: string) => void
   onDeleteSubfolder?: (folderId: number) => void
+  onRestoreSubfolder?: (folderId: number) => void
   onRenameSubfolder?: (folderId: number, name: string) => void
   onMoveFileToSubfolder?: (fileId: number, folderId: string) => void
   currentFolderId?: string
@@ -113,10 +116,11 @@ function ConfirmDeleteModal({ fileName, permanent, onConfirm, onCancel }: { file
   )
 }
 
-function SubfolderRow({ folder, onNavigate, onDelete, onRename, onDrop, dragOverId, setDragOverId }: {
+function SubfolderRow({ folder, onNavigate, onDelete, onRestore, onRename, onDrop, dragOverId, setDragOverId }: {
   folder: FolderItem
   onNavigate: (id: string) => void
   onDelete?: (id: number) => void
+  onRestore?: (id: number) => void
   onRename?: (id: number, name: string) => void
   onDrop?: (fileId: number, folderId: string) => void
   dragOverId: number | null
@@ -133,6 +137,7 @@ function SubfolderRow({ folder, onNavigate, onDelete, onRename, onDrop, dragOver
 
   return (
     <div
+      data-folder-id={folder.id}
       className={`flex cursor-pointer items-center border-t border-[rgba(108,114,117,0.15)] py-[14px] transition-colors md:py-[20px] ${isDragOver ? "bg-[var(--dr-card-border)]/40" : "hover:bg-[var(--dr-card-border)]/20"}`}
       onClick={() => onNavigate(`folder:${folder.id}`)}
       draggable
@@ -210,6 +215,15 @@ function SubfolderRow({ folder, onNavigate, onDelete, onRename, onDrop, dragOver
           <Pencil className="size-[18px]" />
         </button>
       )}
+      {!renaming && onRestore && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onRestore(folder.id) }}
+          className="ml-1 shrink-0 rounded-md p-1 text-[#6c7275] transition-colors hover:bg-[var(--dr-card-border)]/30 hover:text-green-500"
+          title="Restore folder"
+        >
+          <RotateCcw className="size-[18px]" />
+        </button>
+      )}
       {!renaming && onDelete && (
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(folder.id) }}
@@ -285,10 +299,11 @@ function Breadcrumb({ folderName, path, onNavigate }: {
 export function FileListView({
   folderName, files, onImport, onDeleteFile, onTrashFile, onRenameFile,
   subfolders = [], folderPath = [],
-  onNavigateFolder, onCreateSubfolder, onDeleteSubfolder, onRenameSubfolder, onMoveFileToSubfolder,
+  onNavigateFolder, onCreateSubfolder, onDeleteSubfolder, onRestoreSubfolder, onRenameSubfolder, onMoveFileToSubfolder,
   currentFolderId,
 }: FileListViewProps) {
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null)
+  const [deleteFolderTarget, setDeleteFolderTarget] = useState<FolderItem | null>(null)
   const [renameTarget, setRenameTarget] = useState<{ id: number; name: string } | null>(null)
   const [renameValue, setRenameValue] = useState("")
   const [creatingFolder, setCreatingFolder] = useState(false)
@@ -325,8 +340,8 @@ export function FileListView({
       }}
     >
       <div className="flex w-full max-w-[984px] flex-col gap-2">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-3 pr-12 md:pr-0">
+          <div className="flex min-w-0 items-center gap-2">
             {hasBreadcrumb && onNavigateFolder && (
               <button
                 onClick={() => {
@@ -336,20 +351,20 @@ export function FileListView({
                     onNavigateFolder("root")
                   }
                 }}
-                className="flex items-center justify-center rounded-full p-[4px] hover:bg-[var(--dr-card-border)]/30"
+                className="flex shrink-0 items-center justify-center rounded-full p-[4px] hover:bg-[var(--dr-card-border)]/30"
               >
                 <ChevronLeft size={22} className="text-[var(--dr-main-title)]" />
               </button>
             )}
-            <h2 className="font-[Inter,sans-serif] text-[20px] font-bold leading-[32px] tracking-[-0.28px] text-[var(--dr-main-title)] md:text-[28px] md:leading-[40px]">
+            <h2 className="truncate font-[Inter,sans-serif] text-[20px] font-bold leading-[32px] tracking-[-0.28px] text-[var(--dr-main-title)] md:text-[28px] md:leading-[40px]">
               {folderName}
             </h2>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {onCreateSubfolder && !isTrash && (
               <button
                 onClick={() => { setCreatingFolder(true); setNewFolderName("") }}
-                className="flex shrink-0 items-center gap-[6px] rounded-[12px] border-2 border-[#e8ecef] px-[12px] py-[8px] font-[Inter,sans-serif] text-[13px] font-semibold text-[#141718] transition-colors hover:bg-[#f3f5f7] md:px-[16px] md:py-[10px] md:text-[14px]"
+                className="flex shrink-0 items-center gap-[6px] rounded-[12px] border-2 border-[#e8ecef] px-[8px] py-[6px] font-[Inter,sans-serif] text-[13px] font-semibold text-[#141718] transition-colors hover:bg-[#f3f5f7] md:px-[16px] md:py-[10px] md:text-[14px]"
               >
                 <FolderPlus className="size-[16px]" />
                 <span className="hidden md:inline">New folder</span>
@@ -357,7 +372,7 @@ export function FileListView({
             )}
             <button
               onClick={onImport}
-              className="flex shrink-0 items-center gap-[8px] rounded-[12px] bg-[#141718] px-[16px] py-[10px] font-[Inter,sans-serif] text-[14px] font-semibold text-[#fefefe] transition-colors hover:bg-[#232627] md:px-[24px] md:py-[12px] md:text-[16px]"
+              className="flex shrink-0 items-center gap-[8px] rounded-[12px] bg-[#141718] px-[10px] py-[8px] font-[Inter,sans-serif] text-[13px] font-semibold text-[#fefefe] transition-colors hover:bg-[#232627] md:px-[24px] md:py-[12px] md:text-[16px]"
             >
               Import
             </button>
@@ -407,7 +422,11 @@ export function FileListView({
             key={folder.id}
             folder={folder}
             onNavigate={(id) => onNavigateFolder?.(id)}
-            onDelete={onDeleteSubfolder}
+            onDelete={(id) => {
+              const f = subfolders.find((sf) => sf.id === id)
+              if (f) setDeleteFolderTarget(f)
+            }}
+            onRestore={onRestoreSubfolder ? (id) => onRestoreSubfolder(id) : undefined}
             onRename={onRenameSubfolder}
             onDrop={onMoveFileToSubfolder}
             dragOverId={dragOverFolderId}
@@ -438,6 +457,7 @@ export function FileListView({
         {files.map((file) => (
           <div
             key={file.id}
+            data-file-id={file.id}
             draggable={file.status !== "uploading"}
             onDragStart={(e) => {
               if (file.status === "uploading") return
@@ -512,11 +532,55 @@ export function FileListView({
             if (isTrash) {
               onDeleteFile(deleteTarget.id)
             } else {
+              const el = document.querySelector(`[data-file-id="${deleteTarget.id}"]`)
+              const rect = el?.getBoundingClientRect()
               onTrashFile?.(deleteTarget.id)
+              if (rect) {
+                // Element already removed from DOM, animate a ghost from its position
+                const ghost = document.createElement("div")
+                ghost.style.position = "fixed"
+                ghost.style.left = `${rect.left}px`
+                ghost.style.top = `${rect.top}px`
+                ghost.style.width = `${rect.width}px`
+                ghost.style.height = `${rect.height}px`
+                ghost.style.pointerEvents = "none"
+                document.body.appendChild(ghost)
+                triggerTrashAnimation(ghost, "file")
+                setTimeout(() => ghost.remove(), 900)
+              }
             }
             setDeleteTarget(null)
           }}
           onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {deleteFolderTarget && (
+        <DeleteFolderModal
+          folder={deleteFolderTarget}
+          onConfirm={() => {
+            if (!isTrash) {
+              const el = document.querySelector(`[data-folder-id="${deleteFolderTarget.id}"]`)
+              const rect = el?.getBoundingClientRect()
+              onDeleteSubfolder?.(deleteFolderTarget.id)
+              if (rect) {
+                const ghost = document.createElement("div")
+                ghost.style.position = "fixed"
+                ghost.style.left = `${rect.left}px`
+                ghost.style.top = `${rect.top}px`
+                ghost.style.width = `${rect.width}px`
+                ghost.style.height = `${rect.height}px`
+                ghost.style.pointerEvents = "none"
+                document.body.appendChild(ghost)
+                triggerTrashAnimation(ghost, "folder")
+                setTimeout(() => ghost.remove(), 900)
+              }
+            } else {
+              onDeleteSubfolder?.(deleteFolderTarget.id)
+            }
+            setDeleteFolderTarget(null)
+          }}
+          onCancel={() => setDeleteFolderTarget(null)}
         />
       )}
     </div>

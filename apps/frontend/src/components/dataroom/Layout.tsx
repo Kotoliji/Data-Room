@@ -7,8 +7,9 @@ import { ActivityView } from "./ActivityView"
 import type { UploadedFile, FolderItem } from "@/lib/types"
 import { SearchBar } from "./SearchBar"
 import { ImportFilesModal } from "./ImportFilesModal"
-import { getFiles, deleteFile, uploadFiles, moveFile, renameFile, importDriveFiles, getFolders, getAllFolders, createFolder, deleteFolder as apiDeleteFolder, getFolderPath, updateFolder } from "@/lib/api"
+import { getFiles, deleteFile, uploadFiles, moveFile, renameFile, importDriveFiles, getFolders, getAllFolders, createFolder, deleteFolder as apiDeleteFolder, deleteFolderPermanent, restoreFolder, getTrashedFolders, getFolderPath, updateFolder } from "@/lib/api"
 import type { DriveFile } from "@/lib/types"
+import { TrashAnimationLayer } from "./TrashAnimation"
 
 const TOAST_DURATION_MS = 5000
 
@@ -70,11 +71,13 @@ export function Layout() {
 
   const loadSubfolders = useCallback(async () => {
     if (!isLoggedIn) return
-    if (deepestFolderId != null) {
+    if (activeFolder === "Trash" && deepestFolderId == null) {
+      const res = await getTrashedFolders()
+      if (res.data) setSubfolders(res.data.folders)
+    } else if (deepestFolderId != null) {
       const res = await getFolders(deepestFolderId)
       if (res.data) setSubfolders(res.data.folders)
     } else if (activeFolder === "All documents") {
-      // "All documents" shows root-level folders
       const res = await getFolders()
       if (res.data) setSubfolders(res.data.folders)
     } else {
@@ -157,10 +160,36 @@ export function Layout() {
   }, [deepestFolderId, showToast])
 
   const handleDeleteSubfolder = useCallback(async (folderId: number) => {
-    const res = await apiDeleteFolder(folderId)
+    if (activeFolder === "Trash") {
+      // Permanent delete from Trash
+      const res = await deleteFolderPermanent(folderId)
+      if (!res.error) {
+        setSubfolders((prev) => prev.filter((f) => f.id !== folderId))
+        showToast("Folder permanently deleted")
+      } else {
+        showToast(res.error)
+      }
+    } else {
+      // Soft delete — move to Trash
+      const folderKey = `folder:${folderId}`
+      const res = await apiDeleteFolder(folderId)
+      if (!res.error) {
+        setSubfolders((prev) => prev.filter((f) => f.id !== folderId))
+        setAllUserFolders((prev) => prev.filter((f) => f.id !== folderId))
+        setUploadedFiles((prev) => prev.map((f) => f.folder_id === folderKey ? { ...f, folder_id: "Trash" } : f))
+        showToast("Folder moved to Trash")
+      } else {
+        showToast(res.error)
+      }
+    }
+  }, [showToast, activeFolder])
+
+  const handleRestoreSubfolder = useCallback(async (folderId: number) => {
+    const res = await restoreFolder(folderId)
     if (!res.error) {
       setSubfolders((prev) => prev.filter((f) => f.id !== folderId))
-      setAllUserFolders((prev) => prev.filter((f) => f.id !== folderId))
+      if (res.data) { const restored = res.data; setAllUserFolders((prev) => [...prev, restored]) }
+      showToast("Folder restored")
     } else {
       showToast(res.error)
     }
@@ -313,6 +342,7 @@ export function Layout() {
 
   return (
     <div className="flex h-screen items-start overflow-clip bg-[var(--dr-shell-bg)] md:rounded-[20px]">
+      <TrashAnimationLayer />
       <button
         onClick={() => setSidebarOpen(true)}
         className="fixed right-4 top-4 z-50 flex size-10 items-center justify-center rounded-lg bg-[var(--dr-sidebar-card-bg)] text-white md:hidden"
@@ -360,6 +390,7 @@ export function Layout() {
               onNavigateUp={handleNavigateUp}
               onCreateSubfolder={canHaveSubfolders ? handleCreateSubfolder : undefined}
               onDeleteSubfolder={handleDeleteSubfolder}
+              onRestoreSubfolder={activeFolder === "Trash" ? handleRestoreSubfolder : undefined}
               onRenameSubfolder={handleRenameSubfolder}
               onMoveFileToSubfolder={handleMoveFileToSubfolder}
               currentFolderId={effectiveFolderId}

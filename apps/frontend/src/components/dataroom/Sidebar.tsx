@@ -14,6 +14,7 @@ import { SettingsModal } from "./SettingsModal"
 import { UserCard } from "./UserCard"
 import { ThemeToggle } from "./ThemeToggle"
 import { DeleteFolderModal } from "./DeleteFolderModal"
+import { ColorPicker } from "./ColorPicker"
 
 const mainMenu = [
   { icon: DataRoomIcon, label: "Data Room", color: "text-[#3E90F0]" },
@@ -27,7 +28,6 @@ const defaultFolders = [
   { label: "Trash", color: "#D84C10" },
 ]
 
-const FOLDER_COLORS = ["#3e90f0", "#8c6584", "#7ece18", "#f0c93e", "#e05297", "#4fc1b0"]
 
 function highlightFolder(text: string, query: string) {
   const idx = text.toLowerCase().indexOf(query.toLowerCase())
@@ -307,6 +307,7 @@ export function Sidebar({ isOpen, onClose, onFolderChange, activeFolder: activeF
                     key={key}
                     role="button"
                     tabIndex={0}
+                    {...(label === "Trash" ? { "data-trash-target": true } : {})}
                     onClick={() => { if (!isRenaming) { setActiveFolder(key) } }}
                     onKeyDown={(e) => {
                       if (!isRenaming && (e.key === "Enter" || e.key === " ")) {
@@ -352,23 +353,20 @@ export function Sidebar({ isOpen, onClose, onFolderChange, activeFolder: activeF
                         style={{ background: color }}
                       />
                       {showColorPicker && isCustom && (
-                        <div className="absolute left-0 top-full z-50 mt-1 flex gap-1 rounded-[10px] border border-[var(--dr-sidebar-border)] bg-[var(--dr-sidebar-bg)] p-1.5 shadow-lg">
-                          {FOLDER_COLORS.map((c) => (
-                            <button
-                              key={c}
-                              onClick={async (e) => {
-                                e.stopPropagation()
-                                const res = await apiUpdateFolder(item.folder.id, { color: c })
-                                if (res.data) {
-                                  setCustomFolders((prev) => prev.map((f) => f.id === item.folder.id ? { ...f, color: c } : f))
-                                }
-                                setEditColorFolderId(null)
-                              }}
-                              className={cn("flex size-6 items-center justify-center rounded-full", color === c && "ring-2 ring-white")}
-                            >
-                              <div className="size-4 rounded-full" style={{ background: c }} />
-                            </button>
-                          ))}
+                        <div className="absolute left-0 top-full z-50 mt-1">
+                          <ColorPicker
+                            value={color}
+                            onChange={(c) => {
+                              setCustomFolders((prev) => prev.map((f) => f.id === item.folder.id ? { ...f, color: c } : f))
+                            }}
+                            onClose={async () => {
+                              const current = customFolders.find((f) => f.id === item.folder.id)
+                              if (current && current.color !== color) {
+                                await apiUpdateFolder(item.folder.id, { color: current.color })
+                              }
+                              setEditColorFolderId(null)
+                            }}
+                          />
                         </div>
                       )}
                     </div>
@@ -439,27 +437,12 @@ export function Sidebar({ isOpen, onClose, onFolderChange, activeFolder: activeF
                       />
                     </button>
                     {colorPickerOpen && (
-                      <div className="absolute left-full top-0 z-50 ml-1 flex flex-col gap-1 rounded-[10px] border border-[var(--dr-sidebar-border)] bg-[var(--dr-sidebar-bg)] p-1.5 shadow-lg">
-                        {FOLDER_COLORS.map(color => (
-                          <button
-                            key={color}
-                            onClick={() => {
-                              setNewFolderColor(color)
-                              setColorPickerOpen(false)
-                            }}
-                            className={cn(
-                              "rounded-md p-1.5 transition-colors",
-                              newFolderColor === color
-                                ? "bg-white/10"
-                                : "hover:bg-white/5"
-                            )}
-                          >
-                            <div
-                              className="size-4 rounded"
-                              style={{ background: color }}
-                            />
-                          </button>
-                        ))}
+                      <div className="absolute left-full top-0 z-50 ml-1">
+                        <ColorPicker
+                          value={newFolderColor}
+                          onChange={(c) => setNewFolderColor(c)}
+                          onClose={() => setColorPickerOpen(false)}
+                        />
                       </div>
                     )}
                   </div>
