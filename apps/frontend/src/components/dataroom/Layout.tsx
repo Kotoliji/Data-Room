@@ -4,6 +4,8 @@ import { Sidebar } from "./Sidebar"
 import { WelcomeScreen } from "./WelcomeScreen"
 import { FileListView } from "./FileListView"
 import { ActivityView } from "./ActivityView"
+import { SharingView } from "./SharingView"
+import { ShareDialog } from "./ShareDialog"
 import type { UploadedFile, FolderItem } from "@/lib/types"
 import { SearchBar } from "./SearchBar"
 import { ImportFilesModal } from "./ImportFilesModal"
@@ -23,6 +25,7 @@ export function Layout() {
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([])
   const [activeFolder, setActiveFolder] = useState("All documents")
   const [activeTab, setActiveTab] = useState("Data Room")
+  const [shareOpen, setShareOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(null)
 
@@ -340,6 +343,14 @@ export function Layout() {
     return activeFolder
   }, [activeFolder, currentSubfolder, folderPath, activeFolderName])
 
+  // What the Share button exposes: the open folder, or the whole room from "All documents"
+  const shareTarget = useMemo(() => {
+    if (effectiveFolderId.startsWith("folder:")) {
+      return { id: Number(effectiveFolderId.split(":")[1]), name: folderDisplayName }
+    }
+    return effectiveFolderId === "All documents" ? { id: null, name: "Data Room" } : null
+  }, [effectiveFolderId, folderDisplayName])
+
   return (
     <div className="flex h-screen items-start overflow-clip bg-[var(--dr-shell-bg)] md:rounded-[20px]">
       <TrashAnimationLayer />
@@ -376,11 +387,14 @@ export function Layout() {
         >
           {activeTab === "Activity" ? (
             <ActivityView folderId={effectiveFolderId} />
+          ) : activeTab === "Sharing" ? (
+            <SharingView />
           ) : displayFiles.length > 0 || subfolders.length > 0 || canHaveSubfolders ? (
             <FileListView
               folderName={folderDisplayName}
               files={displayFiles}
               onImport={() => setImportOpen(true)}
+              onShare={shareTarget ? () => setShareOpen(true) : undefined}
               onDeleteFile={handleDeleteFile}
               onTrashFile={(fileId) => handleMoveFile(fileId, "Trash")}
               onRenameFile={handleRenameFile}
@@ -402,9 +416,12 @@ export function Layout() {
               onViewDocuments={() => setActiveFolder("All documents")}
             />
           )}
-          {activeTab !== "Activity" && <SearchBar value={search} onChange={setSearch} />}
+          {activeTab === "Data Room" && <SearchBar value={search} onChange={setSearch} />}
         </main>
       </div>
+      {shareOpen && shareTarget && (
+        <ShareDialog folderId={shareTarget.id} folderName={shareTarget.name} onClose={() => setShareOpen(false)} />
+      )}
       <ImportFilesModal
         isOpen={importOpen}
         onClose={() => setImportOpen(false)}

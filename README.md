@@ -31,6 +31,8 @@ The Google OAuth app is in testing mode, so only approved test users can connect
 | Drag & drop              | Drag files/folders between folders in the sidebar               |
 | Search                   | Type in the search bar to filter by file name                   |
 | Activity log             | Switch to "Activity" tab in sidebar                             |
+| Share with investors     | Open a folder → **Share** → set password / expiry / downloads   |
+| Who viewed what          | "Sharing" tab → expand a link to see its access trail           |
 | Google Sign-In           | Use the Google button on login/register pages                   |
 
 ---
@@ -74,7 +76,7 @@ Open `http://localhost:5173` in your browser.
 ```bash
 cd apps/backend
 pip install -r requirements-dev.txt
-pytest -q          # 26 tests: auth, files, folders/trash, Drive import (mocked), security, migrations
+pytest -q          # 35 tests: auth, files, folders/trash, sharing scope, Drive import (mocked), security, migrations
 ```
 
 GitHub Actions runs backend tests plus frontend lint and build on every push and pull request.
@@ -144,6 +146,8 @@ BACKEND_URL=http://localhost:5000
 
 ### Beyond Requirements
 
+- **Secure external sharing** — the core of a real data room: links to a folder subtree or the whole room, with optional password, expiry, view-only mode and revocation
+- **Access trail** — every viewer identifies by email; each open, view and download is recorded per link
 - **Nested folder system** with unlimited depth, breadcrumb navigation, drag & drop
 - **Activity log** tracking all file operations per folder
 - **Profile management** with avatar upload
@@ -204,6 +208,16 @@ Google Docs, Sheets, and Slides cannot be downloaded as-is (they have no binary 
 ### Folder Architecture
 
 Folders use a self-referential `parent_id` foreign key, supporting unlimited nesting. Virtual folders (All documents, Trash, Recently imported) exist only in frontend logic with no database records. This separation keeps the data model clean while providing a rich UX.
+
+### External Sharing & Access Trail
+
+A data room exists to give outside parties (buyers, investors, auditors) controlled access, so sharing is modeled explicitly:
+
+- `ShareLink` points at a folder (its whole subtree) or at the entire room (`folder_id = NULL`). The token is 192 bits from `secrets.token_urlsafe`.
+- Viewers open `/s/<token>`, enter their email (and the password, if set) and get a signed access token valid for 8 hours. Revocation and expiry are checked on **every** request, so revoking cuts off viewers who are already inside.
+- Scope is enforced on the server by walking up the folder tree to the link's root: folders and files outside the subtree, or in Trash, return 404 even when requested by id.
+- View-only links serve only passive formats inline (PDF, images, text) and refuse downloads. This is best-effort by nature: anything a browser can display can be saved.
+- `ShareAccess` rows record `opened`, `viewed` and `downloaded` events with email and IP. They have no foreign key to files, so the trail outlives deleted documents. Revoked links are kept, never deleted, for the same reason.
 
 ### Activity Log
 
@@ -303,6 +317,19 @@ The application uses server-signed Bearer tokens for API authentication:
 | `DELETE` | `/api/v1/folders/:id`      | Delete folder and contents          |
 | `GET`    | `/api/v1/folders/:id/path` | Get breadcrumb path                 |
 
+### Sharing
+
+| Method   | Endpoint                                | Description                                  |
+| -------- | --------------------------------------- | -------------------------------------------- |
+| `GET`    | `/api/v1/shares`                        | List my share links with viewer stats        |
+| `POST`   | `/api/v1/shares`                        | Create link (folder, password, expiry, download) |
+| `DELETE` | `/api/v1/shares/:id`                    | Revoke link (access trail is kept)           |
+| `GET`    | `/api/v1/shares/:id/accesses`           | Access trail: who opened / viewed / downloaded |
+| `GET`    | `/api/v1/public/shares/:token`          | Public link info (name, owner, needs password) |
+| `POST`   | `/api/v1/public/shares/:token/unlock`   | Email + password → viewer access token       |
+| `GET`    | `/api/v1/public/shares/:token/contents` | Browse folders and files inside the link's scope |
+| `GET`    | `/api/v1/public/shares/:token/files/:id`| View or download a shared file (logged)      |
+
 ### Activity
 
 | Method   | Endpoint           | Description                             |
@@ -358,4 +385,13 @@ ActivityLog
 Session
 ├── id, user_id, device, ip
 ├── created_at, is_active
+
+ShareLink
+├── id, token (unique), user_id, folder_id (nullable — null = entire room)
+├── name, password_hash, expires_at, allow_download, revoked
+└── created_at
+
+ShareAccess
+├── id, link_id, viewer_email, action (opened/viewed/downloaded)
+└── file_id, file_name, ip, created_at
 ```

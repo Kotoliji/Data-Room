@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react"
 import { Upload, Download, Trash2, Pencil, ArrowRight, Loader2 } from "lucide-react"
 import type { ActivityEntry } from "@/lib/types"
 import { getActivity, clearActivity } from "@/lib/api"
+import { timeAgo } from "@/lib/utils"
 
 const ACTION_CONFIG: Record<string, { icon: typeof Upload; color: string; label: string }> = {
   uploaded: { icon: Upload, color: "text-[#3E90F0]", label: "Uploaded" },
@@ -9,20 +10,6 @@ const ACTION_CONFIG: Record<string, { icon: typeof Upload; color: string; label:
   deleted: { icon: Trash2, color: "text-[#D84C10]", label: "Deleted" },
   renamed: { icon: Pencil, color: "text-[#F0C93E]", label: "Renamed" },
   moved: { icon: ArrowRight, color: "text-[#3FDD78]", label: "Moved" },
-}
-
-function timeAgo(dateStr: string): string {
-  const now = Date.now()
-  const then = new Date(dateStr).getTime()
-  const diff = Math.max(0, now - then)
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return "just now"
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}d ago`
-  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }
 
 interface ActivityViewProps {

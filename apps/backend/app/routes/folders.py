@@ -1,7 +1,7 @@
 from flask import Blueprint, Response, request, jsonify, current_app
 
 from app import db
-from app.models import User, Folder, File
+from app.models import User, Folder, File, ShareLink
 from app.utils import require_auth
 from app.services.activity_service import log_activity
 from app.services.file_service import remove_file
@@ -157,6 +157,8 @@ def delete_folder_permanent(user: User, folder_id: int) -> tuple[Response, int]:
     ).all()
     for record in files:
         remove_file(user, record)
+    for link in ShareLink.query.filter(ShareLink.folder_id.in_([f.id for f in subtree])).all():
+        db.session.delete(link)  # ORM cascade removes its access trail too
     for f in reversed(subtree):
         db.session.delete(f)
     log_activity(user.id, "deleted", folder.name, details=f"folder with {len(files)} file(s)")

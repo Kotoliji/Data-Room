@@ -1,16 +1,15 @@
 import mimetypes
 import os
 import uuid
-from pathlib import Path
 
-from flask import Blueprint, Response, request, jsonify, current_app, send_file
+from flask import Blueprint, Response, request, jsonify, current_app
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from werkzeug.utils import secure_filename
 
 from app import db
 from app.models import User, File
 from app.services.activity_service import log_activity
-from app.services.file_service import storage_dir, deduplicate_name, remove_file, is_valid_folder_key
+from app.services.file_service import deduplicate_name, remove_file, is_valid_folder_key, send_stored_file, storage_dir
 from app.utils import require_auth
 from app.constants import MAX_FILE_SIZE, FILE_VIEW_TOKEN_MAX_AGE
 
@@ -19,12 +18,6 @@ MAX_FILES_PER_REQUEST = 20
 ALLOWED_EXTENSIONS = {
     "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
     "txt", "csv", "jpg", "jpeg", "png", "gif", "svg", "zip",
-}
-
-
-INLINE_MIMES = {
-    "application/pdf", "text/plain", "text/csv",
-    "image/jpeg", "image/png", "image/gif", "image/webp",
 }
 
 
@@ -160,31 +153,9 @@ def view_file(file_id: int) -> Response:
     if not record:
         return jsonify({"data": None, "error": "File not found"}), 404
 
-    file_path = Path(record.path).resolve()
-    allowed_dir = storage_dir(user.id).resolve()
-    if not file_path.is_relative_to(allowed_dir):
-        current_app.logger.warning("Path traversal attempt: %s (user %s)", record.path, user.id)
-        return jsonify({"data": None, "error": "Forbidden"}), 403
-
-    if not file_path.exists():
+    response = send_stored_file(record)
+    if response is None:
         return jsonify({"data": None, "error": "File not found on disk"}), 404
-
-    # MIME is derived from the server-side file name, never from client input.
-    # Only passive formats are rendered inline; everything else (HTML, SVG, Office…)
-    # is forced to download so uploaded content can never run scripts on our origin.
-    mime = mimetypes.guess_type(record.name)[0] or record.mime_type or "application/octet-stream"
-    inline = mime in INLINE_MIMES
-
-    response = send_file(
-        str(file_path),
-        mimetype=mime if inline else "application/octet-stream",
-        download_name=record.original_name,
-        as_attachment=not inline,
-    )
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    if mime != "application/pdf":
-        # Browsers' PDF viewers refuse to render in a sandboxed document
-        response.headers["Content-Security-Policy"] = "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'"
     return response
 
 

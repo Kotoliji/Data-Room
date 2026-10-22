@@ -1,4 +1,4 @@
-import { Check, Trash2, X, Pencil, Eye, Folder, ChevronRight, ChevronLeft, FolderPlus, RotateCcw } from "lucide-react"
+import { Check, Trash2, X, Pencil, Eye, Folder, ChevronRight, ChevronLeft, FolderPlus, RotateCcw, Share2 } from "lucide-react"
 import { useState, useRef, useCallback } from "react"
 import type { UploadedFile, FolderItem } from "@/lib/types"
 import { getFileViewUrl } from "@/lib/api"
@@ -10,6 +10,7 @@ interface FileListViewProps {
   folderName: string
   files: (UploadedFile | { id: string; original_name: string; size: number; status: "uploading" })[]
   onImport: () => void
+  onShare?: () => void
   onDeleteFile: (fileId: number) => void
   onTrashFile?: (fileId: number) => void
   onRenameFile?: (fileId: number, newName: string) => void
@@ -297,7 +298,7 @@ function Breadcrumb({ folderName, path, onNavigate }: {
 }
 
 export function FileListView({
-  folderName, files, onImport, onDeleteFile, onTrashFile, onRenameFile,
+  folderName, files, onImport, onShare, onDeleteFile, onTrashFile, onRenameFile,
   subfolders = [], folderPath = [],
   onNavigateFolder, onCreateSubfolder, onDeleteSubfolder, onRestoreSubfolder, onRenameSubfolder, onMoveFileToSubfolder,
   currentFolderId,
@@ -368,6 +369,15 @@ export function FileListView({
               >
                 <FolderPlus className="size-[16px]" />
                 <span className="hidden md:inline">New folder</span>
+              </button>
+            )}
+            {onShare && (
+              <button
+                onClick={onShare}
+                className="flex shrink-0 items-center gap-[6px] rounded-[12px] border-2 border-white bg-white px-[8px] py-[6px] font-[Inter,sans-serif] text-[13px] font-semibold text-[#141718] transition-colors hover:bg-[#f3f5f7] md:px-[16px] md:py-[10px] md:text-[14px]"
+              >
+                <Share2 className="size-[16px]" />
+                <span className="hidden md:inline">Share</span>
               </button>
             )}
             <button

@@ -6,6 +6,7 @@ import { ResetPassword } from '@/components/auth/ResetPassword'
 import { NewPassword } from '@/components/auth/NewPassword'
 import { ThemeProvider } from '@/lib/theme'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
+import { PublicShare } from '@/components/share/PublicShare'
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
           <Route path="/register" element={<CreateAccount />} />
           <Route path="/forgot-password" element={<ResetPassword />} />
           <Route path="/reset-password" element={<NewPassword />} />
+          <Route path="/s/:token" element={<PublicShare />} />
         </Routes>
       </BrowserRouter>
     </ThemeProvider>

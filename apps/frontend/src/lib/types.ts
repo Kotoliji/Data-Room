@@ -93,3 +93,60 @@ export interface ActivityEntry {
   details: string | null
   created_at: string
 }
+
+export interface ShareLink {
+  id: number
+  token: string
+  name: string
+  folder_id: number | null
+  folder_name: string | null
+  has_password: boolean
+  expires_at: string | null
+  allow_download: boolean
+  revoked: boolean
+  expired: boolean
+  created_at: string
+  viewer_count: number
+  event_count: number
+  last_access_at: string | null
+}
+
+export interface CreateSharePayload {
+  folder_id: number | null
+  name?: string
+  password?: string
+  expires_in_days?: number | null
+  allow_download: boolean
+}
+
+export interface ShareAccessEntry {
+  id: number
+  viewer_email: string
+  action: "opened" | "viewed" | "downloaded"
+  file_name: string | null
+  ip: string
+  created_at: string
+}
+
+export interface PublicShareInfo {
+  name: string
+  owner_name: string
+  requires_password: boolean
+  allow_download: boolean
+  expires_at: string | null
+}
+
+export interface PublicShareFile {
+  id: number
+  name: string
+  size: number
+  mime_type: string | null
+  created_at: string
+  viewable: boolean
+}
+
+export interface PublicShareContents {
+  path: { id: number; name: string }[]
+  folders: { id: number; name: string; color: string }[]
+  files: PublicShareFile[]
+}

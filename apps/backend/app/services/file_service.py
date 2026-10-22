@@ -1,7 +1,8 @@
+import mimetypes
 import uuid
 from pathlib import Path
 
-from flask import current_app
+from flask import Response, current_app, send_file
 from werkzeug.utils import secure_filename
 
 from app import db
@@ -10,10 +11,54 @@ from app.services.google_drive import download_file as drive_download, GOOGLE_MI
 from app.constants import MAX_FILE_SIZE
 
 
+# Passive formats that are safe to render inline on our origin
+INLINE_MIMES = {
+    "application/pdf", "text/plain", "text/csv",
+    "image/jpeg", "image/png", "image/gif", "image/webp",
+}
+
+
 def storage_dir(user_id: int) -> Path:
     base = Path(current_app.config["STORAGE_DIR"]) / str(user_id)
     base.mkdir(parents=True, exist_ok=True)
     return base
+
+
+def served_mime(record: File) -> str:
+    """MIME derived from the server-side file name, never from client input."""
+    return mimetypes.guess_type(record.name)[0] or record.mime_type or "application/octet-stream"
+
+
+def is_inline_viewable(record: File) -> bool:
+    return served_mime(record) in INLINE_MIMES
+
+
+def send_stored_file(record: File, download: bool = False) -> Response | None:
+    """Serve a stored file safely, or None if it is missing on disk.
+
+    Only passive formats render inline; everything else (HTML, SVG, Office...) is forced
+    to download so uploaded content can never run scripts on our origin.
+    """
+    path = Path(record.path).resolve()
+    if not path.is_relative_to(storage_dir(record.user_id).resolve()):
+        current_app.logger.warning("Path traversal attempt: %s (user %s)", record.path, record.user_id)
+        return None
+    if not path.exists():
+        return None
+
+    mime = served_mime(record)
+    inline = mime in INLINE_MIMES and not download
+    response = send_file(
+        str(path),
+        mimetype=mime if inline else "application/octet-stream",
+        download_name=record.original_name,
+        as_attachment=not inline,
+    )
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    if mime != "application/pdf":
+        # Browsers' PDF viewers refuse to render in a sandboxed document
+        response.headers["Content-Security-Policy"] = "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'"
+    return response
 
 
 def is_valid_folder_key(user: User, folder_key: str) -> bool:
