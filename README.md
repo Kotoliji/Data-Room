@@ -34,6 +34,8 @@ The Google OAuth app is in testing mode, so only approved test users can connect
 | Share with investors     | Open a folder → **Share** → set password / expiry / downloads   |
 | Who viewed what          | "Sharing" tab → expand a link → Analytics / Access log          |
 | In-app PDF viewer        | Click any PDF — zoom, page counter, lazy page rendering          |
+| AI due diligence         | "Diligence" tab → checklist coverage, Run AI review             |
+| Search inside documents  | Type 3+ characters in search — matches in file text are tagged   |
 | Google Sign-In           | Use the Google button on login/register pages                   |
 
 ---
@@ -77,7 +79,7 @@ Open `http://localhost:5173` in your browser.
 ```bash
 cd apps/backend
 pip install -r requirements-dev.txt
-pytest -q          # 38 tests: auth, files, folders/trash, sharing scope, Drive import (mocked), security, migrations
+pytest -q          # 45 tests: auth, files, folders/trash, sharing scope, Drive import (mocked), security, migrations
 ```
 
 GitHub Actions runs backend tests plus frontend lint and build on every push and pull request.
@@ -150,6 +152,8 @@ BACKEND_URL=http://localhost:5000
 - **Secure external sharing** — the core of a real data room: links to a folder subtree or the whole room, with optional password, expiry, view-only mode and revocation
 - **Access trail** — every viewer identifies by email; each open, view and download is recorded per link
 - **In-app PDF viewer** (pdf.js, lazy-loaded) with **page-level engagement tracking**: owners see time spent per page as a heatmap, the most engaged viewers and 14-day activity
+- **AI due diligence** (Claude): every document is classified into a standard DD category with a one-line summary and sensitive-data flags; the room is scored against a 16-item M&A checklist with evidence per item; sharing warns before exposing sensitive files
+- **Full-text search** inside PDF, DOCX, XLSX, PPTX and TXT documents
 - **Dynamic watermarking** — every PDF served through a share link has the viewer's email and date burned into each page on the server
 - **Nested folder system** with unlimited depth, breadcrumb navigation, drag & drop
 - **Activity log** tracking all file operations per folder
@@ -227,6 +231,25 @@ A data room exists to give outside parties (buyers, investors, auditors) control
 - **Time on page.** The in-app viewer (pdf.js, loaded only when a PDF opens) tracks which page is most visible and, while the tab is in front, credits one second per tick to it. It reports every 15 seconds and on tab close via `navigator.sendBeacon`. Beacons are sent as `text/plain` so they stay CORS-simple across origins. The server caps what a single report can add (120 s) and keeps one row per viewer, file and page.
 - **Analytics endpoint.** It aggregates the access trail and page times into KPIs, per-viewer engagement, a per-document page heatmap and 14-day activity. The dashboard uses a single hue: page intensity is a `color-mix` from the theme surface toward the brand blue, so it works in light and dark mode.
 - **Watermarking happens on the server**, not as a CSS overlay. Each page of a shared PDF gets a tiled, 12%-opacity stamp (`viewer@email · date`) merged in with `pypdf`, both for in-app viewing and for downloads, so a leaked copy identifies its source. Encrypted or malformed PDFs are served as-is, with a warning in the log.
+
+### AI Due Diligence
+
+AI here does data-room-specific work, not generic "chat with your documents":
+
+| Feature | How it works |
+| --- | --- |
+| Classification | After upload or import, a background thread extracts text (pypdf; DOCX/PPTX/XLSX parsed as OOXML with no extra dependencies) and asks Claude for a category, a one-sentence summary and sensitive-data flags (personal IDs, compensation, bank details, health data, credentials). |
+| Checklist gap analysis | One request sends Claude the room index (name, category, summary per file) and a standard 16-item M&A checklist. Each item is marked covered, partial or missing, citing evidence by file id. Ids that are not in the room are dropped, so the model cannot cite documents that don't exist. |
+| Pre-share warning | Creating a share link lists the flagged documents inside the link's scope before anything is exposed. |
+| Content search | Extracted text is stored per document; search matches inside files and shows a snippet. |
+
+Implementation notes:
+
+- Claude Opus 5.5 with structured outputs (`output_config.format` JSON schema). Classification is a simple task, so it runs at `effort: "low"`.
+- Server-side refusal fallback is enabled (`fallbacks: "default"`).
+- Refusals, `max_tokens` and API errors (rate limits, 5xx, network) are handled explicitly. Each one degrades to the heuristic path instead of failing the upload.
+- Classification sends only the first 15k characters of a document: the opening pages identify it, and cost per file stays bounded. The full text is still stored for search.
+- **Without `ANTHROPIC_API_KEY`** the same features run on keyword and regex heuristics, labelled as such in the UI. Tests and local development never call the API.
 
 ### Activity Log
 
@@ -337,9 +360,19 @@ The application uses server-signed Bearer tokens for API authentication:
 | `GET`    | `/api/v1/public/shares/:token`          | Public link info (name, owner, needs password) |
 | `POST`   | `/api/v1/public/shares/:token/unlock`   | Email + password → viewer access token       |
 | `GET`    | `/api/v1/public/shares/:token/contents` | Browse folders and files inside the link's scope |
+| `GET`    | `/api/v1/shares/preview?folder_id=`     | Sensitive documents inside a would-be share scope |
 | `GET`    | `/api/v1/shares/:id/analytics`          | KPIs, viewer engagement, page heatmap, daily activity |
 | `GET`    | `/api/v1/public/shares/:token/files/:id`| View or download a shared file (logged, PDFs watermarked)|
 | `POST`   | `/api/v1/public/shares/:token/files/:id/pages` | Viewer heartbeat: seconds per page          |
+
+### Due Diligence
+
+| Method | Endpoint                     | Description                                              |
+| ------ | ---------------------------- | -------------------------------------------------------- |
+| `GET`  | `/api/v1/diligence`          | Checklist coverage, categories, sensitive documents      |
+| `POST` | `/api/v1/diligence/review`   | Re-run checklist gap analysis (Claude or heuristics)     |
+| `POST` | `/api/v1/diligence/analyze`  | Classify documents that predate analysis or failed       |
+| `GET`  | `/api/v1/files/search?q=`    | Full-text search inside documents, with snippets         |
 
 ### Activity
 
@@ -409,4 +442,11 @@ ShareAccess
 SharePageView                      (unique per link + viewer + file + page)
 ├── id, link_id, viewer_email, file_id, file_name
 └── page, seconds, updated_at
+
+DocumentInsight                    (one per file)
+├── id, file_id, status (pending/ready/failed), source (claude/heuristic)
+└── category, summary, sensitive (JSON), text, updated_at
+
+DiligenceReview
+└── id, user_id, result (JSON checklist), source, created_at
 ```

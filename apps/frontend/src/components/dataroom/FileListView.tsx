@@ -3,6 +3,7 @@ import { useState, useRef, useCallback } from "react"
 import type { UploadedFile, FolderItem } from "@/lib/types"
 import { getFileViewUrl } from "@/lib/api"
 import { LazyPdfViewer as PdfViewer } from "@/components/viewer/LazyPdfViewer"
+import { InsightBadges } from "./InsightBadges"
 import { formatSize } from "@/lib/utils"
 import { DeleteFolderModal } from "./DeleteFolderModal"
 import { triggerTrashAnimation } from "./TrashAnimation"
@@ -25,6 +26,8 @@ interface FileListViewProps {
   onRenameSubfolder?: (folderId: number, name: string) => void
   onMoveFileToSubfolder?: (fileId: number, folderId: string) => void
   currentFolderId?: string
+  /** Content-search snippets keyed by file id */
+  snippets?: Record<number, string>
 }
 
 function LoadingDots() {
@@ -302,7 +305,7 @@ export function FileListView({
   folderName, files, onImport, onShare, onDeleteFile, onTrashFile, onRenameFile,
   subfolders = [], folderPath = [],
   onNavigateFolder, onCreateSubfolder, onDeleteSubfolder, onRestoreSubfolder, onRenameSubfolder, onMoveFileToSubfolder,
-  currentFolderId,
+  currentFolderId, snippets = {},
 }: FileListViewProps) {
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null)
   const [deleteFolderTarget, setDeleteFolderTarget] = useState<FolderItem | null>(null)
@@ -505,6 +508,9 @@ export function FileListView({
               >
                 {file.original_name}
               </span>
+            )}
+            {renameTarget?.id !== file.id && file.status !== "uploading" && (
+              <InsightBadges insight={(file as UploadedFile).insight} snippet={snippets[file.id as number]} />
             )}
 
             {file.status === "uploading" ? (

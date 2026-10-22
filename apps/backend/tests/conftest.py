@@ -11,6 +11,8 @@ def app(tmp_path, monkeypatch):
     monkeypatch.setenv("SECRET_KEY", "test-secret-key-0123456789")
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
     monkeypatch.setenv("STORAGE_DIR", str(tmp_path / "storage"))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")  # tests never call the real API
+    monkeypatch.setenv("INSIGHTS_ASYNC", "0")    # analyze inline so assertions see results
     app = create_app()
     limiter.reset()
     yield app

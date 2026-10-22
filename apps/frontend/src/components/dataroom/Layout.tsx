@@ -5,11 +5,12 @@ import { WelcomeScreen } from "./WelcomeScreen"
 import { FileListView } from "./FileListView"
 import { ActivityView } from "./ActivityView"
 import { SharingView } from "./SharingView"
+import { DiligenceView } from "./DiligenceView"
 import { ShareDialog } from "./ShareDialog"
 import type { UploadedFile, FolderItem } from "@/lib/types"
 import { SearchBar } from "./SearchBar"
 import { ImportFilesModal } from "./ImportFilesModal"
-import { getFiles, deleteFile, uploadFiles, moveFile, renameFile, importDriveFiles, getFolders, getAllFolders, createFolder, deleteFolder as apiDeleteFolder, deleteFolderPermanent, restoreFolder, getTrashedFolders, getFolderPath, updateFolder } from "@/lib/api"
+import { getFiles, deleteFile, uploadFiles, moveFile, renameFile, importDriveFiles, getFolders, getAllFolders, createFolder, deleteFolder as apiDeleteFolder, deleteFolderPermanent, restoreFolder, getTrashedFolders, getFolderPath, updateFolder, searchContent } from "@/lib/api"
 import type { DriveFile } from "@/lib/types"
 import { TrashAnimationLayer } from "./TrashAnimation"
 
@@ -48,6 +49,25 @@ export function Layout() {
     const res = await getFiles()
     if (res.data) setUploadedFiles(res.data.files)
   }, [isLoggedIn])
+
+  // Search inside documents (server full-text) in addition to the instant name filter
+  const [contentHits, setContentHits] = useState<Record<number, string>>({})
+  useEffect(() => {
+    const q = search.trim()
+    const t = window.setTimeout(async () => {
+      if (q.length < 3) { setContentHits({}); return }
+      const res = await searchContent(q)
+      setContentHits(Object.fromEntries((res.data?.results ?? []).map((r) => [r.file_id, r.snippet])))
+    }, 300)
+    return () => window.clearTimeout(t)
+  }, [search])
+
+  // Refresh while uploaded documents are still being classified in the background
+  useEffect(() => {
+    if (!uploadedFiles.some((f) => f.insight?.status === "pending")) return
+    const t = window.setTimeout(fetchFiles, 3000)
+    return () => window.clearTimeout(t)
+  }, [uploadedFiles, fetchFiles])
 
   const fetchAllFolders = useCallback(async () => {
     if (!isLoggedIn) return
@@ -326,7 +346,7 @@ export function Layout() {
     : uploadedFiles.filter((f) => f.folder_id === effectiveFolderId)
 
   const searchFiltered = search.trim()
-    ? filteredUploaded.filter((f) => f.original_name.toLowerCase().includes(search.toLowerCase()))
+    ? filteredUploaded.filter((f) => f.original_name.toLowerCase().includes(search.toLowerCase()) || f.id in contentHits)
     : filteredUploaded
 
   const displayFiles = [...uploadingFiles, ...searchFiltered]
@@ -389,6 +409,8 @@ export function Layout() {
             <ActivityView folderId={effectiveFolderId} />
           ) : activeTab === "Sharing" ? (
             <SharingView />
+          ) : activeTab === "Diligence" ? (
+            <DiligenceView />
           ) : displayFiles.length > 0 || subfolders.length > 0 || canHaveSubfolders ? (
             <FileListView
               folderName={folderDisplayName}
@@ -408,6 +430,7 @@ export function Layout() {
               onRenameSubfolder={handleRenameSubfolder}
               onMoveFileToSubfolder={handleMoveFileToSubfolder}
               currentFolderId={effectiveFolderId}
+              snippets={search.trim() ? contentHits : undefined}
             />
           ) : (
             <WelcomeScreen

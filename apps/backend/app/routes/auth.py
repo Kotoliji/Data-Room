@@ -8,7 +8,7 @@ from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 from werkzeug.utils import secure_filename
 
 from app import db, limiter
-from app.models import User, Session, File, Folder, ActivityLog, ShareLink
+from app.models import User, Session, File, Folder, ActivityLog, ShareLink, DocumentInsight, DiligenceReview
 from app.services.email_service import send_reset_email
 from app.utils import require_auth, parse_device, generate_session_token
 from app.constants import PASSWORD_RESET_TOKEN_MAX_AGE
@@ -370,6 +370,9 @@ def delete_account(user: User) -> tuple[Response, int]:
     # Delete all related records
     for link in ShareLink.query.filter_by(user_id=user.id).all():
         db.session.delete(link)
+    file_ids = [f.id for f in File.query.with_entities(File.id).filter_by(user_id=user.id)]
+    DocumentInsight.query.filter(DocumentInsight.file_id.in_(file_ids)).delete(synchronize_session=False)
+    DiligenceReview.query.filter_by(user_id=user.id).delete()
     db.session.flush()
     ActivityLog.query.filter_by(user_id=user.id).delete()
     Session.query.filter_by(user_id=user.id).delete()

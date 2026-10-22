@@ -9,6 +9,7 @@ from werkzeug.utils import secure_filename
 from app import db
 from app.models import User, File
 from app.services.activity_service import log_activity
+from app.services.insights import queue_analysis
 from app.services.file_service import deduplicate_name, remove_file, is_valid_folder_key, send_stored_file, storage_dir
 from app.utils import require_auth
 from app.constants import MAX_FILE_SIZE, FILE_VIEW_TOKEN_MAX_AGE
@@ -82,6 +83,7 @@ def upload_files(user: User) -> tuple[Response, int]:
     for r in results:
         log_activity(user.id, "uploaded", r.original_name, folder_id=r.folder_id)
     db.session.commit()
+    queue_analysis([r.id for r in results])
 
     current_app.logger.info("Uploaded %d files for user %s", len(results), user.id)
     return jsonify({

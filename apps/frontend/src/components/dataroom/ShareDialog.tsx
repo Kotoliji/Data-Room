@@ -1,7 +1,8 @@
-import { useState } from "react"
-import { Check, Copy, Link2, X } from "lucide-react"
-import type { ShareLink } from "@/lib/types"
-import { createShare, shareUrl } from "@/lib/api"
+import { useEffect, useState } from "react"
+import { Check, Copy, Link2, ShieldAlert, X } from "lucide-react"
+import type { ShareLink, SharePreview } from "@/lib/types"
+import { createShare, getSharePreview, shareUrl } from "@/lib/api"
+import { SENSITIVE_LABELS } from "@/lib/labels"
 import { parseServerDate } from "@/lib/utils"
 
 interface ShareDialogProps {
@@ -28,6 +29,11 @@ export function ShareDialog({ folderId, folderName, onClose }: ShareDialogProps)
   const [error, setError] = useState<string | null>(null)
   const [link, setLink] = useState<ShareLink | null>(null)
   const [copied, setCopied] = useState(false)
+  const [preview, setPreview] = useState<SharePreview | null>(null)
+
+  useEffect(() => {
+    getSharePreview(folderId).then((res) => setPreview(res.data))
+  }, [folderId])
 
   const handleCreate = async () => {
     setSaving(true)
@@ -132,6 +138,22 @@ export function ShareDialog({ folderId, folderName, onClose }: ShareDialogProps)
               <input type="checkbox" className="size-[16px] accent-[#141718]" checked={allowDownload} onChange={(e) => setAllowDownload(e.target.checked)} />
               Allow viewers to download files
             </label>
+
+            {preview && preview.flagged.length > 0 && (
+              <div className="flex flex-col gap-2 rounded-[12px] border border-amber-300 bg-amber-50 px-[14px] py-[10px]">
+                <span className="flex items-center gap-2 text-[13px] font-semibold text-amber-700">
+                  <ShieldAlert size={15} /> {preview.flagged.length} of {preview.total} documents may contain sensitive data
+                </span>
+                <ul className="flex flex-col gap-[2px] text-[12px] text-amber-800">
+                  {preview.flagged.slice(0, 4).map((f) => (
+                    <li key={f.id} className="truncate">
+                      <span className="font-semibold">{f.name}</span> — {f.sensitive.map((s) => SENSITIVE_LABELS[s.kind]).join(", ")}
+                    </li>
+                  ))}
+                  {preview.flagged.length > 4 && <li>and {preview.flagged.length - 4} more</li>}
+                </ul>
+              </div>
+            )}
 
             {error && <p className="text-[13px] text-red-500">{error}</p>}
 

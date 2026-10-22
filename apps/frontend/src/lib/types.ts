@@ -54,6 +54,20 @@ export interface UploadedFile {
   drive_file_id?: string
   status: string
   created_at: string
+  insight?: FileInsight | null
+}
+
+export interface SensitiveFlag {
+  kind: "personal_ids" | "compensation" | "bank_details" | "health" | "credentials"
+  detail: string
+}
+
+export interface FileInsight {
+  status: "pending" | "ready" | "failed"
+  category: string | null
+  summary: string | null
+  sensitive: SensitiveFlag[]
+  source: "claude" | "heuristic" | null
 }
 
 export interface DriveFile {
@@ -172,4 +186,30 @@ export interface ShareAnalytics {
     pages: { page: number; seconds: number }[]
   }[]
   daily: { date: string; events: number }[]
+}
+
+export interface ChecklistItem {
+  id: string
+  category: string
+  title: string
+  status: "covered" | "partial" | "missing"
+  note: string
+  evidence: { id: number; name: string }[]
+}
+
+export interface DiligenceOverview {
+  ai_enabled: boolean
+  source: "claude" | "heuristic"
+  reviewed_at: string | null
+  checklist: ChecklistItem[]
+  categories: { category: string; count: number }[]
+  sensitive_files: { id: number; name: string; sensitive: SensitiveFlag[] }[]
+  total_files: number
+  unanalyzed: number
+  pending: number
+}
+
+export interface SharePreview {
+  total: number
+  flagged: { id: number; name: string; sensitive: SensitiveFlag[] }[]
 }

@@ -5,6 +5,7 @@ from app.models import User
 from app.services.google_drive import list_files as drive_list_files
 from app.services.file_service import import_from_drive, is_valid_folder_key
 from app.services.activity_service import log_activity
+from app.services.insights import queue_analysis
 from app.utils import require_auth
 
 drive_bp = Blueprint("drive", __name__)
@@ -62,11 +63,12 @@ def import_drive_files(user: User) -> tuple[Response, int]:
         record = import_from_drive(user, file_id, file_name, mime_type, size, folder_id)
         if record:
             log_activity(user.id, "imported", record.original_name, folder_id=record.folder_id, details="from Google Drive")
-            imported.append(record.to_dict())
+            imported.append(record)
         else:
             errors.append({"name": file_name, "error": "Download failed"})
 
     db.session.commit()
+    queue_analysis([r.id for r in imported])
 
     current_app.logger.info(
         "Drive import for user %s: %d imported, %d errors",
@@ -74,6 +76,6 @@ def import_drive_files(user: User) -> tuple[Response, int]:
     )
 
     return jsonify({
-        "data": {"files": imported, "errors": errors},
+        "data": {"files": [r.to_dict() for r in imported], "errors": errors},
         "error": None,
     }), 200

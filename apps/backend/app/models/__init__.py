@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -64,9 +65,11 @@ class File(db.Model):
     )
 
     user = db.relationship("User", backref="files")
+    insight = db.relationship("DocumentInsight", uselist=False, cascade="all, delete-orphan")
 
     def to_dict(self) -> dict:
         return {
+            "insight": self.insight.to_dict() if self.insight else None,
             "id": self.id,
             "name": self.name,
             "original_name": self.original_name,
@@ -216,4 +219,45 @@ class SharePageView(db.Model):
     seconds: int = db.Column(db.Integer, default=0, nullable=False)
     updated_at: datetime = db.Column(
         db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
+
+
+class DocumentInsight(db.Model):
+    """Extracted text plus AI (or heuristic) classification of one document."""
+
+    __tablename__ = "document_insights"
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    file_id: int = db.Column(db.Integer, db.ForeignKey("files.id", ondelete="CASCADE"), unique=True, nullable=False)
+    status: str = db.Column(db.String(20), default="pending", nullable=False)  # pending | ready | failed
+    category: str | None = db.Column(db.String(40), nullable=True)
+    summary: str | None = db.Column(db.Text, nullable=True)
+    sensitive: str = db.Column(db.Text, default="[]", nullable=False)  # JSON list of {kind, detail}
+    source: str | None = db.Column(db.String(20), nullable=True)  # claude | heuristic
+    text: str | None = db.Column(db.Text, nullable=True)
+    updated_at: datetime = db.Column(
+        db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "status": self.status,
+            "category": self.category,
+            "summary": self.summary,
+            "sensitive": json.loads(self.sensitive or "[]"),
+            "source": self.source,
+        }
+
+
+class DiligenceReview(db.Model):
+    """Latest checklist gap analysis for a user's Data Room."""
+
+    __tablename__ = "diligence_reviews"
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    user_id: int = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    result: str = db.Column(db.Text, nullable=False)  # JSON list of checklist item results
+    source: str = db.Column(db.String(20), nullable=False)
+    created_at: datetime = db.Column(
+        db.DateTime, default=lambda: datetime.now(timezone.utc)
     )

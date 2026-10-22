@@ -42,6 +42,8 @@ def create_app() -> Flask:
     app.config["BACKEND_URL"] = os.environ.get("BACKEND_URL", "http://localhost:5000")
     app.config["GOOGLE_CLIENT_ID"] = os.environ.get("GOOGLE_CLIENT_ID", "")
     app.config["GOOGLE_CLIENT_SECRET"] = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+    app.config["ANTHROPIC_API_KEY"] = os.environ.get("ANTHROPIC_API_KEY", "")
+    app.config["INSIGHTS_ASYNC"] = os.environ.get("INSIGHTS_ASYNC", "1") != "0"
 
     CORS(app, origins=[app.config["FRONTEND_URL"]])
     db.init_app(app)

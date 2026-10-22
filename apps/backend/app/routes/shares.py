@@ -1,3 +1,4 @@
+import json
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -100,6 +101,23 @@ def _authorized_viewer(token: str) -> tuple[ShareLink | None, str | None, tuple[
 def list_shares(user: User) -> tuple[Response, int]:
     links = ShareLink.query.filter_by(user_id=user.id).order_by(ShareLink.created_at.desc()).all()
     return jsonify({"data": {"shares": [link.to_dict() for link in links]}, "error": None}), 200
+
+
+@shares_bp.route("/preview", methods=["GET"])
+@require_auth
+def share_preview(user: User) -> tuple[Response, int]:
+    """Before sharing: which documents in the would-be scope carry sensitive-data flags."""
+    raw = request.args.get("folder_id")
+    if raw and not raw.isdigit():
+        return jsonify({"data": None, "error": "Invalid folder"}), 400
+    draft = ShareLink(user_id=user.id, folder_id=int(raw) if raw else None)  # never added to the session
+    files = File.query.filter(File.user_id == user.id, File.folder_id != "Trash").all()
+    flagged = [
+        {"id": f.id, "name": f.original_name, "sensitive": json.loads(f.insight.sensitive)}
+        for f in files
+        if f.insight and f.insight.sensitive not in (None, "[]") and _file_in_scope(draft, f)
+    ]
+    return jsonify({"data": {"total": sum(1 for f in files if _file_in_scope(draft, f)), "flagged": flagged}, "error": None}), 200
 
 
 @shares_bp.route("", methods=["POST"])

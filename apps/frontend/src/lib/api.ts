@@ -1,4 +1,4 @@
-import type { ApiResponse, User, AuthResponse, RegisterPayload, LoginPayload, MessageResponse, UpdateProfilePayload, Session, UploadedFile, DriveFilesResponse, DriveImportResponse, DriveFile, ActivityEntry, FolderItem, ShareLink, CreateSharePayload, ShareAccessEntry, PublicShareInfo, PublicShareContents, ShareAnalytics } from "./types"
+import type { ApiResponse, User, AuthResponse, RegisterPayload, LoginPayload, MessageResponse, UpdateProfilePayload, Session, UploadedFile, DriveFilesResponse, DriveImportResponse, DriveFile, ActivityEntry, FolderItem, ShareLink, CreateSharePayload, ShareAccessEntry, PublicShareInfo, PublicShareContents, ShareAnalytics, DiligenceOverview, SharePreview } from "./types"
 
 export const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5000"
 const BASE_URL = `${API_BASE}/api/v1`
@@ -306,4 +306,26 @@ export function sharedFileUrl(token: string, access: string, fileId: number, dow
 
 export function sharedFilePagesUrl(token: string, access: string, fileId: number): string {
   return `${BASE_URL}/public/shares/${token}/files/${fileId}/pages?${new URLSearchParams({ access })}`
+}
+
+// --------------- Due diligence (AI) ---------------
+
+export function getDiligence(): Promise<ApiResponse<DiligenceOverview>> {
+  return request<DiligenceOverview>("/diligence", { method: "GET" })
+}
+
+export function runDiligenceReview(): Promise<ApiResponse<DiligenceOverview>> {
+  return request<DiligenceOverview>("/diligence/review", { method: "POST" })
+}
+
+export function analyzeUnprocessed(): Promise<ApiResponse<{ queued: number }>> {
+  return request<{ queued: number }>("/diligence/analyze", { method: "POST" })
+}
+
+export function searchContent(q: string): Promise<ApiResponse<{ results: { file_id: number; snippet: string }[] }>> {
+  return request<{ results: { file_id: number; snippet: string }[] }>(`/files/search?q=${encodeURIComponent(q)}`, { method: "GET" })
+}
+
+export function getSharePreview(folderId: number | null): Promise<ApiResponse<SharePreview>> {
+  return request<SharePreview>(`/shares/preview${folderId != null ? `?folder_id=${folderId}` : ""}`, { method: "GET" })
 }
