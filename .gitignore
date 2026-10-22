@@ -3,6 +3,7 @@
 *.txt
 !apps/**/README.txt
 !apps/**/requirements.txt
+!apps/**/requirements-dev.txt
 .docx_extract/
 
 # Claude Code

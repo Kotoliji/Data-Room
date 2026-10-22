@@ -10,6 +10,8 @@ interface TrashAnimationItem {
 
 let addAnimation: ((item: TrashAnimationItem) => void) | null = null
 
+// Imperative trigger paired with the layer below; the layer registers itself on mount
+// eslint-disable-next-line react-refresh/only-export-components
 export function triggerTrashAnimation(el: HTMLElement, type: "file" | "folder") {
   if (!addAnimation) return
   const rect = el.getBoundingClientRect()

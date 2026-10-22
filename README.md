@@ -69,6 +69,25 @@ npm run dev                   # Runs on http://localhost:5173
 
 Open `http://localhost:5173` in your browser.
 
+### Tests & CI
+
+```bash
+cd apps/backend
+pip install -r requirements-dev.txt
+pytest -q          # 26 tests: auth, files, folders/trash, Drive import (mocked), security, migrations
+```
+
+GitHub Actions runs backend tests plus frontend lint and build on every push and pull request.
+
+### Database migrations
+
+The schema is managed by Alembic (Flask-Migrate) and upgraded automatically on startup. Databases created before Alembic was introduced are detected, brought up to the baseline and stamped — no manual steps. To change the schema:
+
+```bash
+cd apps/backend
+flask --app run.py db migrate -m "describe change"   # then review migrations/versions/*
+```
+
 ---
 
 ## Setup from Scratch
@@ -135,7 +154,7 @@ BACKEND_URL=http://localhost:5000
 
 ## Design Decisions
 
-### Database: SQLite
+### Database: SQLite (Postgres-ready)
 
 SQLite was chosen for zero-setup local development — it ships with Python and needs no external server. All database access goes through SQLAlchemy ORM, so migrating to Postgres for production requires only changing the connection string. For an MVP handling single-user workflows, SQLite is more than sufficient.
 

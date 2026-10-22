@@ -8,9 +8,9 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from werkzeug.utils import secure_filename
 
 from app import db
-from app.models import User, File, Folder
+from app.models import User, File
 from app.services.activity_service import log_activity
-from app.services.file_service import storage_dir
+from app.services.file_service import storage_dir, deduplicate_name, remove_file, is_valid_folder_key
 from app.utils import require_auth
 from app.constants import MAX_FILE_SIZE, FILE_VIEW_TOKEN_MAX_AGE
 
@@ -43,6 +43,8 @@ def upload_files(user: User) -> tuple[Response, int]:
         return jsonify({"data": None, "error": f"Maximum {MAX_FILES_PER_REQUEST} files per upload"}), 400
 
     folder_id = request.form.get("folder_id", "all")
+    if not is_valid_folder_key(user, folder_id):
+        return jsonify({"data": None, "error": "Folder not found"}), 404
     storage = storage_dir(user.id)
     results = []
     skipped = []
@@ -72,7 +74,7 @@ def upload_files(user: User) -> tuple[Response, int]:
 
         record = File(
             name=original,
-            original_name=f.filename,
+            original_name=deduplicate_name(f.filename, user.id, folder_id),
             mime_type=mimetypes.guess_type(original)[0] or "application/octet-stream",
             size=size,
             path=str(path),
@@ -81,6 +83,7 @@ def upload_files(user: User) -> tuple[Response, int]:
             status="uploaded",
         )
         db.session.add(record)
+        db.session.flush()  # so the next duplicate in this batch sees it
         results.append(record)
 
     for r in results:
@@ -193,17 +196,8 @@ def move_file(user: User, file_id: int) -> tuple[Response, int]:
     if not folder_id:
         return jsonify({"data": None, "error": "folder_id is required"}), 400
 
-    # Validate target folder exists and belongs to user
-    if folder_id not in ("all", "Trash"):
-        if folder_id.startswith("folder:"):
-            try:
-                fid = int(folder_id.split(":")[1])
-            except (IndexError, ValueError):
-                return jsonify({"data": None, "error": "Invalid folder_id"}), 400
-            if not Folder.query.filter_by(id=fid, user_id=user.id).first():
-                return jsonify({"data": None, "error": "Folder not found"}), 404
-        else:
-            return jsonify({"data": None, "error": "Invalid folder_id"}), 400
+    if not is_valid_folder_key(user, folder_id):
+        return jsonify({"data": None, "error": "Folder not found"}), 404
 
     record = File.query.filter_by(id=file_id, user_id=user.id).first()
     if not record:
@@ -234,6 +228,11 @@ def rename_file(user: User, file_id: int) -> tuple[Response, int]:
     if not record:
         return jsonify({"data": None, "error": "File not found"}), 404
 
+    if new_name == record.original_name:
+        return jsonify({"data": record.to_dict(), "error": None}), 200
+    if File.query.filter_by(user_id=user.id, folder_id=record.folder_id, original_name=new_name).first():
+        return jsonify({"data": None, "error": "A file with this name already exists in this folder"}), 409
+
     old_name = record.original_name
     record.original_name = new_name
     log_activity(user.id, "renamed", new_name, folder_id=record.folder_id, details=f"from {old_name}")
@@ -250,20 +249,9 @@ def delete_file(user: User, file_id: int) -> tuple[Response, int]:
     if not record:
         return jsonify({"data": None, "error": "File not found"}), 404
 
-    try:
-        path = Path(record.path).resolve()
-        allowed_dir = storage_dir(user.id).resolve()
-        if not path.is_relative_to(allowed_dir):
-            current_app.logger.warning("Path traversal attempt on delete: %s (user %s)", record.path, user.id)
-            return jsonify({"data": None, "error": "Forbidden"}), 403
-        if path.exists():
-            path.unlink()
-    except OSError:
-        current_app.logger.warning("Could not delete file on disk: %s", record.path)
-
     file_name = record.original_name
     file_folder = record.folder_id
-    db.session.delete(record)
+    remove_file(user, record)
     log_activity(user.id, "deleted", file_name, folder_id=file_folder)
     db.session.commit()
 

@@ -3,7 +3,7 @@ from flask import Blueprint, Response, request, jsonify, current_app
 from app import db
 from app.models import User
 from app.services.google_drive import list_files as drive_list_files
-from app.services.file_service import import_from_drive
+from app.services.file_service import import_from_drive, is_valid_folder_key
 from app.services.activity_service import log_activity
 from app.utils import require_auth
 
@@ -40,6 +40,8 @@ def import_drive_files(user: User) -> tuple[Response, int]:
 
     files_to_import = data["files"]
     folder_id = data.get("folder_id", "all")
+    if not isinstance(folder_id, str) or not is_valid_folder_key(user, folder_id):
+        return jsonify({"data": None, "error": "Folder not found"}), 404
 
     if len(files_to_import) > 20:
         return jsonify({"data": None, "error": "Maximum 20 files per import"}), 400
