@@ -143,6 +143,7 @@ class ShareLink(db.Model):
     folder = db.relationship("Folder")
     accesses = db.relationship("ShareAccess", backref="link", cascade="all, delete-orphan",
                                lazy="dynamic", order_by="ShareAccess.created_at.desc()")
+    page_views = db.relationship("SharePageView", cascade="all, delete-orphan", lazy="dynamic")
 
     def set_password(self, password: str | None) -> None:
         self.password_hash = generate_password_hash(password) if password else None
@@ -198,3 +199,21 @@ class ShareAccess(db.Model):
             "ip": self.ip,
             "created_at": self.created_at.isoformat(),
         }
+
+
+class SharePageView(db.Model):
+    """Seconds a viewer spent on each page of a shared PDF (one row per viewer/file/page)."""
+
+    __tablename__ = "share_page_views"
+    __table_args__ = (db.UniqueConstraint("link_id", "viewer_email", "file_id", "page"),)
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    link_id: int = db.Column(db.Integer, db.ForeignKey("share_links.id", ondelete="CASCADE"), nullable=False, index=True)
+    viewer_email: str = db.Column(db.String(120), nullable=False)
+    file_id: int = db.Column(db.Integer, nullable=False)
+    file_name: str = db.Column(db.String(255), nullable=False)
+    page: int = db.Column(db.Integer, nullable=False)
+    seconds: int = db.Column(db.Integer, default=0, nullable=False)
+    updated_at: datetime = db.Column(
+        db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )

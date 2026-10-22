@@ -1,4 +1,4 @@
-import type { ApiResponse, User, AuthResponse, RegisterPayload, LoginPayload, MessageResponse, UpdateProfilePayload, Session, UploadedFile, DriveFilesResponse, DriveImportResponse, DriveFile, ActivityEntry, FolderItem, ShareLink, CreateSharePayload, ShareAccessEntry, PublicShareInfo, PublicShareContents } from "./types"
+import type { ApiResponse, User, AuthResponse, RegisterPayload, LoginPayload, MessageResponse, UpdateProfilePayload, Session, UploadedFile, DriveFilesResponse, DriveImportResponse, DriveFile, ActivityEntry, FolderItem, ShareLink, CreateSharePayload, ShareAccessEntry, PublicShareInfo, PublicShareContents, ShareAnalytics } from "./types"
 
 export const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5000"
 const BASE_URL = `${API_BASE}/api/v1`
@@ -270,6 +270,10 @@ export function getShareAccesses(linkId: number): Promise<ApiResponse<{ accesses
   return request<{ accesses: ShareAccessEntry[] }>(`/shares/${linkId}/accesses`, { method: "GET" })
 }
 
+export function getShareAnalytics(linkId: number): Promise<ApiResponse<ShareAnalytics>> {
+  return request<ShareAnalytics>(`/shares/${linkId}/analytics`, { method: "GET" })
+}
+
 export function shareUrl(token: string): string {
   return `${window.location.origin}/s/${token}`
 }
@@ -298,4 +302,8 @@ export function getShareContents(token: string, access: string, folderId?: numbe
 export function sharedFileUrl(token: string, access: string, fileId: number, download = false): string {
   const params = new URLSearchParams({ access, ...(download ? { download: "1" } : {}) })
   return `${BASE_URL}/public/shares/${token}/files/${fileId}?${params}`
+}
+
+export function sharedFilePagesUrl(token: string, access: string, fileId: number): string {
+  return `${BASE_URL}/public/shares/${token}/files/${fileId}/pages?${new URLSearchParams({ access })}`
 }

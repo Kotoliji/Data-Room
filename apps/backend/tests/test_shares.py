@@ -133,3 +133,56 @@ def test_permanent_folder_delete_removes_its_links(app, client, auth):
     client.delete(f"/api/v1/folders/{legal['id']}/permanent", headers=auth)
     with app.app_context():
         assert ShareLink.query.count() == 0
+
+
+def _pdf_bytes(pages: int = 2) -> bytes:
+    import io
+    from pypdf import PdfWriter
+    writer = PdfWriter()
+    for _ in range(pages):
+        writer.add_blank_page(612, 792)
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
+
+
+def test_shared_pdf_is_watermarked_with_viewer_email(client, auth):
+    import io
+    from pypdf import PdfReader
+    fid = upload(client, auth, "deck.pdf", _pdf_bytes()).get_json()["data"]["files"][0]["id"]
+    link = share(client, auth, allow_download=True)
+    _, access = unlock(client, link["token"], email="leaker@fund.com")
+    for suffix in ("", "&download=1"):
+        r = client.get(f"/api/v1/public/shares/{link['token']}/files/{fid}?access={access}{suffix}")
+        pages = PdfReader(io.BytesIO(r.data)).pages
+        assert len(pages) == 2 and all("leaker@fund.com" in p.extract_text() for p in pages)
+
+
+def test_page_time_tracking_and_analytics(client, auth):
+    fid = upload(client, auth, "model.pdf", _pdf_bytes(3)).get_json()["data"]["files"][0]["id"]
+    link = share(client, auth)
+    _, a = unlock(client, link["token"], email="a@fund.com")
+    _, b = unlock(client, link["token"], email="b@fund.com")
+    url = f"/api/v1/public/shares/{link['token']}/files/{fid}"
+    client.get(f"{url}?access={a}")
+    # sendBeacon posts text/plain; values above the per-report cap are clipped
+    client.post(f"{url}/pages?access={a}", data='{"pages": {"1": 20, "3": 40}}', content_type="text/plain")
+    client.post(f"{url}/pages?access={a}", json={"pages": {"3": 10}})
+    client.post(f"{url}/pages", headers={"X-Share-Access": b}, json={"pages": {"2": 5000, "x": 3}})
+
+    data = client.get(f"/api/v1/shares/{link['id']}/analytics", headers=auth).get_json()["data"]
+    assert data["totals"]["viewers"] == 2 and data["totals"]["seconds"] == 20 + 50 + 120
+    assert [v["email"] for v in data["viewers"]] == ["b@fund.com", "a@fund.com"]
+    doc = data["documents"][0]
+    assert doc["file_name"] == "model.pdf" and doc["viewers"] == 2 and doc["views"] == 1
+    assert doc["pages"] == [{"page": 1, "seconds": 20}, {"page": 2, "seconds": 120}, {"page": 3, "seconds": 50}]
+    assert len(data["daily"]) == 14 and data["daily"][-1]["events"] == 3
+
+
+def test_page_tracking_requires_access_and_pdf(client, auth):
+    txt = upload(client, auth, "notes.txt", b"hi", "text/plain").get_json()["data"]["files"][0]["id"]
+    link = share(client, auth)
+    _, access = unlock(client, link["token"])
+    base = f"/api/v1/public/shares/{link['token']}/files/{txt}/pages"
+    assert client.post(base, json={"pages": {"1": 5}}).status_code == 401
+    assert client.post(f"{base}?access={access}", json={"pages": {"1": 5}}).status_code == 404

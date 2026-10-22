@@ -3,6 +3,7 @@ import { ChevronDown, Copy, Download, Eye, Link2, Loader2, Lock, LogIn, Ban } fr
 import type { ShareAccessEntry, ShareLink } from "@/lib/types"
 import { getShareAccesses, getShares, revokeShare, shareUrl } from "@/lib/api"
 import { timeAgo } from "@/lib/utils"
+import { ShareAnalyticsPanel } from "./ShareAnalyticsPanel"
 
 const ACCESS_CONFIG: Record<ShareAccessEntry["action"], { icon: typeof Eye; color: string; label: string }> = {
   opened: { icon: LogIn, color: "text-[#3E90F0]", label: "Opened the link" },
@@ -56,6 +57,7 @@ export function SharingView() {
   const [links, setLinks] = useState<ShareLink[] | null>(null)
   const [expanded, setExpanded] = useState<number | null>(null)
   const [copiedId, setCopiedId] = useState<number | null>(null)
+  const [panel, setPanel] = useState<"Analytics" | "Access log">("Analytics")
 
   useEffect(() => {
     getShares().then((res) => setLinks(res.data?.shares ?? []))
@@ -140,7 +142,7 @@ export function SharingView() {
                     )}
                     <button
                       onClick={() => setExpanded(isOpen ? null : link.id)}
-                      aria-label="Show access log"
+                      aria-label="Show analytics"
                       className="rounded-full p-[6px] text-[var(--dr-main-subtitle)] hover:bg-[var(--dr-card-border)]/40"
                     >
                       <ChevronDown size={18} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
@@ -148,8 +150,21 @@ export function SharingView() {
                   </div>
                 </div>
                 {isOpen && (
-                  <div className="border-t border-[var(--dr-card-border)] py-1">
-                    <AccessTrail linkId={link.id} />
+                  <div className="border-t border-[var(--dr-card-border)]">
+                    <div className="flex gap-1 px-4 pt-3">
+                      {(["Analytics", "Access log"] as const).map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => setPanel(t)}
+                          className={`rounded-[8px] px-3 py-[5px] font-[Inter,sans-serif] text-[12px] font-semibold transition-colors ${
+                            panel === t ? "bg-[var(--dr-card-border)] text-[var(--dr-main-title)]" : "text-[var(--dr-main-subtitle)] hover:text-[var(--dr-main-title)]"
+                          }`}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                    {panel === "Analytics" ? <ShareAnalyticsPanel linkId={link.id} /> : <div className="py-1"><AccessTrail linkId={link.id} /></div>}
                   </div>
                 )}
               </div>

@@ -6,8 +6,8 @@ from flask import Blueprint, Response, request, jsonify, current_app
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from app import db, limiter
-from app.models import User, File, Folder, ShareLink, ShareAccess
-from app.services.file_service import is_inline_viewable, send_stored_file
+from app.models import User, File, Folder, ShareLink, ShareAccess, SharePageView
+from app.services.file_service import is_inline_viewable, send_stored_file, served_mime
 from app.utils import require_auth
 from app.constants import SHARE_ACCESS_TOKEN_MAX_AGE
 
@@ -15,6 +15,8 @@ shares_bp = Blueprint("shares", __name__)
 public_bp = Blueprint("public_shares", __name__)
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+MAX_HEARTBEAT_SECONDS = 120  # the viewer reports every ~15s; cap what one report can add
+ANALYTICS_DAYS = 14
 
 
 # --------------- Scope helpers ---------------
@@ -247,8 +249,110 @@ def share_file(token: str, file_id: int) -> Response | tuple[Response, int]:
     if (download or not is_inline_viewable(record)) and not link.allow_download:
         return jsonify({"data": None, "error": "The owner disabled downloads for this link"}), 403
 
-    response = send_stored_file(record, download=download)
+    stamp = f"{email} · {datetime.now(timezone.utc):%d %b %Y}"
+    response = send_stored_file(record, download=download, watermark=stamp)
     if response is None:
         return jsonify({"data": None, "error": "File not found on disk"}), 404
     _log(link, email, "downloaded" if download or not is_inline_viewable(record) else "viewed", record)
     return response
+
+
+@public_bp.route("/<token>/files/<int:file_id>/pages", methods=["POST"])
+@limiter.limit("60 per minute")
+def track_pages(token: str, file_id: int) -> tuple[Response, int]:
+    """Heartbeat from the in-app PDF viewer: {"pages": {"<page>": <seconds>}}."""
+    link, email, error = _authorized_viewer(token)
+    if error:
+        return error
+    record = db.session.get(File, file_id)
+    if not record or not _file_in_scope(link, record) or served_mime(record) != "application/pdf":
+        return jsonify({"data": None, "error": "File not found"}), 404
+
+    # navigator.sendBeacon posts text/plain to stay CORS-simple, so parse regardless of type
+    pages = (request.get_json(force=True, silent=True) or {}).get("pages")
+    if not isinstance(pages, dict):
+        return jsonify({"data": None, "error": "pages object is required"}), 400
+
+    budget = MAX_HEARTBEAT_SECONDS
+    for raw_page, raw_seconds in pages.items():
+        if budget <= 0:
+            break
+        if not str(raw_page).isdigit() or not isinstance(raw_seconds, (int, float)):
+            continue
+        page, seconds = int(raw_page), min(int(raw_seconds), budget)
+        if not 1 <= page <= 10_000 or seconds <= 0:
+            continue
+        budget -= seconds
+        row = SharePageView.query.filter_by(link_id=link.id, viewer_email=email, file_id=file_id, page=page).first()
+        if row:
+            row.seconds += seconds
+        else:
+            db.session.add(SharePageView(link_id=link.id, viewer_email=email, file_id=file_id,
+                                         file_name=record.original_name, page=page, seconds=seconds))
+    db.session.commit()
+    return jsonify({"data": {"recorded": MAX_HEARTBEAT_SECONDS - budget}, "error": None}), 200
+
+
+@shares_bp.route("/<int:link_id>/analytics", methods=["GET"])
+@require_auth
+def share_analytics(user: User, link_id: int) -> tuple[Response, int]:
+    """Per-viewer and per-document engagement for one link, plus daily activity."""
+    link = ShareLink.query.filter_by(id=link_id, user_id=user.id).first()
+    if not link:
+        return jsonify({"data": None, "error": "Link not found"}), 404
+
+    accesses = link.accesses.all()
+    page_views = link.page_views.all()
+    viewers: dict[str, dict] = {}
+    documents: dict[int, dict] = {}
+
+    def viewer(email: str) -> dict:
+        return viewers.setdefault(email, {"email": email, "opens": 0, "views": 0, "downloads": 0,
+                                          "seconds": 0, "first_seen": None, "last_seen": None})
+
+    def document(file_id: int, name: str) -> dict:
+        return documents.setdefault(file_id, {"file_id": file_id, "file_name": name, "views": 0, "downloads": 0,
+                                              "seconds": 0, "viewers": set(), "pages": {}})
+
+    for a in accesses:
+        v = viewer(a.viewer_email)
+        v[{"opened": "opens", "viewed": "views", "downloaded": "downloads"}[a.action]] += 1
+        stamp = a.created_at.isoformat()
+        v["first_seen"] = min(v["first_seen"] or stamp, stamp)
+        v["last_seen"] = max(v["last_seen"] or stamp, stamp)
+        if a.file_id is not None:
+            d = document(a.file_id, a.file_name or "")
+            d["views" if a.action == "viewed" else "downloads"] += 1
+            d["viewers"].add(a.viewer_email)
+
+    for p in page_views:
+        viewer(p.viewer_email)["seconds"] += p.seconds
+        d = document(p.file_id, p.file_name)
+        d["seconds"] += p.seconds
+        d["viewers"].add(p.viewer_email)
+        d["pages"][p.page] = d["pages"].get(p.page, 0) + p.seconds
+
+    today = datetime.now(timezone.utc).date()
+    daily = {(today - timedelta(days=i)).isoformat(): 0 for i in range(ANALYTICS_DAYS - 1, -1, -1)}
+    for a in accesses:
+        day = a.created_at.date().isoformat()
+        if day in daily:
+            daily[day] += 1
+
+    docs = []
+    for d in sorted(documents.values(), key=lambda d: (-d["seconds"], -d["views"])):
+        pages = d.pop("pages")
+        docs.append({**d, "viewers": len(d["viewers"]),
+                     "pages": [{"page": n, "seconds": pages.get(n, 0)} for n in range(1, max(pages, default=0) + 1)]})
+
+    return jsonify({"data": {
+        "totals": {
+            "viewers": len(viewers),
+            "seconds": sum(p.seconds for p in page_views),
+            "views": sum(1 for a in accesses if a.action == "viewed"),
+            "downloads": sum(1 for a in accesses if a.action == "downloaded"),
+        },
+        "viewers": sorted(viewers.values(), key=lambda v: (-v["seconds"], v["email"])),
+        "documents": docs,
+        "daily": [{"date": day, "events": n} for day, n in daily.items()],
+    }, "error": None}), 200

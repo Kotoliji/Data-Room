@@ -150,3 +150,26 @@ export interface PublicShareContents {
   folders: { id: number; name: string; color: string }[]
   files: PublicShareFile[]
 }
+
+export interface ShareAnalytics {
+  totals: { viewers: number; seconds: number; views: number; downloads: number }
+  viewers: {
+    email: string
+    opens: number
+    views: number
+    downloads: number
+    seconds: number
+    first_seen: string | null
+    last_seen: string | null
+  }[]
+  documents: {
+    file_id: number
+    file_name: string
+    views: number
+    downloads: number
+    seconds: number
+    viewers: number
+    pages: { page: number; seconds: number }[]
+  }[]
+  daily: { date: string; events: number }[]
+}

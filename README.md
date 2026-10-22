@@ -32,7 +32,8 @@ The Google OAuth app is in testing mode, so only approved test users can connect
 | Search                   | Type in the search bar to filter by file name                   |
 | Activity log             | Switch to "Activity" tab in sidebar                             |
 | Share with investors     | Open a folder → **Share** → set password / expiry / downloads   |
-| Who viewed what          | "Sharing" tab → expand a link to see its access trail           |
+| Who viewed what          | "Sharing" tab → expand a link → Analytics / Access log          |
+| In-app PDF viewer        | Click any PDF — zoom, page counter, lazy page rendering          |
 | Google Sign-In           | Use the Google button on login/register pages                   |
 
 ---
@@ -76,7 +77,7 @@ Open `http://localhost:5173` in your browser.
 ```bash
 cd apps/backend
 pip install -r requirements-dev.txt
-pytest -q          # 35 tests: auth, files, folders/trash, sharing scope, Drive import (mocked), security, migrations
+pytest -q          # 38 tests: auth, files, folders/trash, sharing scope, Drive import (mocked), security, migrations
 ```
 
 GitHub Actions runs backend tests plus frontend lint and build on every push and pull request.
@@ -148,6 +149,8 @@ BACKEND_URL=http://localhost:5000
 
 - **Secure external sharing** — the core of a real data room: links to a folder subtree or the whole room, with optional password, expiry, view-only mode and revocation
 - **Access trail** — every viewer identifies by email; each open, view and download is recorded per link
+- **In-app PDF viewer** (pdf.js, lazy-loaded) with **page-level engagement tracking**: owners see time spent per page as a heatmap, the most engaged viewers and 14-day activity
+- **Dynamic watermarking** — every PDF served through a share link has the viewer's email and date burned into each page on the server
 - **Nested folder system** with unlimited depth, breadcrumb navigation, drag & drop
 - **Activity log** tracking all file operations per folder
 - **Profile management** with avatar upload
@@ -218,6 +221,12 @@ A data room exists to give outside parties (buyers, investors, auditors) control
 - Scope is enforced on the server by walking up the folder tree to the link's root: folders and files outside the subtree, or in Trash, return 404 even when requested by id.
 - View-only links serve only passive formats inline (PDF, images, text) and refuse downloads. This is best-effort by nature: anything a browser can display can be saved.
 - `ShareAccess` rows record `opened`, `viewed` and `downloaded` events with email and IP. They have no foreign key to files, so the trail outlives deleted documents. Revoked links are kept, never deleted, for the same reason.
+
+### Viewer Analytics & Watermarking
+
+- **Time on page.** The in-app viewer (pdf.js, loaded only when a PDF opens) tracks which page is most visible and, while the tab is in front, credits one second per tick to it. It reports every 15 seconds and on tab close via `navigator.sendBeacon`. Beacons are sent as `text/plain` so they stay CORS-simple across origins. The server caps what a single report can add (120 s) and keeps one row per viewer, file and page.
+- **Analytics endpoint.** It aggregates the access trail and page times into KPIs, per-viewer engagement, a per-document page heatmap and 14-day activity. The dashboard uses a single hue: page intensity is a `color-mix` from the theme surface toward the brand blue, so it works in light and dark mode.
+- **Watermarking happens on the server**, not as a CSS overlay. Each page of a shared PDF gets a tiled, 12%-opacity stamp (`viewer@email · date`) merged in with `pypdf`, both for in-app viewing and for downloads, so a leaked copy identifies its source. Encrypted or malformed PDFs are served as-is, with a warning in the log.
 
 ### Activity Log
 
@@ -328,7 +337,9 @@ The application uses server-signed Bearer tokens for API authentication:
 | `GET`    | `/api/v1/public/shares/:token`          | Public link info (name, owner, needs password) |
 | `POST`   | `/api/v1/public/shares/:token/unlock`   | Email + password → viewer access token       |
 | `GET`    | `/api/v1/public/shares/:token/contents` | Browse folders and files inside the link's scope |
-| `GET`    | `/api/v1/public/shares/:token/files/:id`| View or download a shared file (logged)      |
+| `GET`    | `/api/v1/shares/:id/analytics`          | KPIs, viewer engagement, page heatmap, daily activity |
+| `GET`    | `/api/v1/public/shares/:token/files/:id`| View or download a shared file (logged, PDFs watermarked)|
+| `POST`   | `/api/v1/public/shares/:token/files/:id/pages` | Viewer heartbeat: seconds per page          |
 
 ### Activity
 
@@ -394,4 +405,8 @@ ShareLink
 ShareAccess
 ├── id, link_id, viewer_email, action (opened/viewed/downloaded)
 └── file_id, file_name, ip, created_at
+
+SharePageView                      (unique per link + viewer + file + page)
+├── id, link_id, viewer_email, file_id, file_name
+└── page, seconds, updated_at
 ```

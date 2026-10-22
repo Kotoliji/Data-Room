@@ -2,6 +2,7 @@ import { Check, Trash2, X, Pencil, Eye, Folder, ChevronRight, ChevronLeft, Folde
 import { useState, useRef, useCallback } from "react"
 import type { UploadedFile, FolderItem } from "@/lib/types"
 import { getFileViewUrl } from "@/lib/api"
+import { LazyPdfViewer as PdfViewer } from "@/components/viewer/LazyPdfViewer"
 import { formatSize } from "@/lib/utils"
 import { DeleteFolderModal } from "./DeleteFolderModal"
 import { triggerTrashAnimation } from "./TrashAnimation"
@@ -312,6 +313,18 @@ export function FileListView({
   const [dragOverFolderId, setDragOverFolderId] = useState<number | null>(null)
   const [dragOverContainer, setDragOverContainer] = useState(false)
   const isTrash = folderName === "Trash"
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; name: string } | null>(null)
+
+  // PDFs open in the in-app viewer; other formats keep the browser's native handling
+  const openFile = async (file: UploadedFile) => {
+    const url = await getFileViewUrl(file.id)
+    if (!url) return
+    if (file.mime_type === "application/pdf" || file.original_name.toLowerCase().endsWith(".pdf")) {
+      setPdfPreview({ url, name: file.original_name })
+    } else {
+      window.open(url, "_blank")
+    }
+  }
 
   const hasSubfolders = subfolders.length > 0
   const hasFiles = files.length > 0
@@ -488,12 +501,7 @@ export function FileListView({
             ) : (
               <span
                 className="flex-1 cursor-pointer truncate font-[Inter,sans-serif] text-[14px] font-semibold leading-[24px] tracking-[-0.28px] text-[var(--dr-main-title)] hover:underline"
-                onClick={async () => {
-                  if (file.status !== "uploading") {
-                    const url = await getFileViewUrl(file.id as number)
-                    if (url) window.open(url, "_blank")
-                  }
-                }}
+                onClick={() => { if (file.status !== "uploading") openFile(file as UploadedFile) }}
               >
                 {file.original_name}
               </span>
@@ -507,7 +515,7 @@ export function FileListView({
                   {formatSize(file.size)}
                 </span>
                 <button
-                  onClick={async () => { const url = await getFileViewUrl(file.id as number); if (url) window.open(url, "_blank") }}
+                  onClick={() => openFile(file as UploadedFile)}
                   className="hidden shrink-0 rounded-md p-1 text-[#6c7275] transition-colors hover:bg-[#f3f5f7] hover:text-[#2752f4] md:block"
                   title="View file"
                 >
@@ -593,6 +601,8 @@ export function FileListView({
           onCancel={() => setDeleteFolderTarget(null)}
         />
       )}
+
+      {pdfPreview && <PdfViewer url={pdfPreview.url} title={pdfPreview.name} onClose={() => setPdfPreview(null)} />}
     </div>
   )
 }

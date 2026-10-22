@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react"
 import { useParams } from "react-router-dom"
 import { ChevronRight, Download, Eye, FileText, Folder, Loader2, Lock, ShieldCheck } from "lucide-react"
-import type { PublicShareContents, PublicShareInfo } from "@/lib/types"
-import { getPublicShare, getShareContents, sharedFileUrl, unlockShare } from "@/lib/api"
+import type { PublicShareContents, PublicShareFile, PublicShareInfo } from "@/lib/types"
+import { getPublicShare, getShareContents, sharedFilePagesUrl, sharedFileUrl, unlockShare } from "@/lib/api"
+import { LazyPdfViewer as PdfViewer } from "@/components/viewer/LazyPdfViewer"
 import { formatSize } from "@/lib/utils"
+
+const isPdf = (f: PublicShareFile) => f.mime_type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf")
 
 const storageKey = (token: string) => `share_access:${token}`
 
@@ -78,6 +81,7 @@ export function PublicShare() {
   const [access, setAccess] = useState<string | null>(() => readAccess(token))
   const [folderId, setFolderId] = useState<number | undefined>(undefined)
   const [contents, setContents] = useState<PublicShareContents | null>(null)
+  const [openPdf, setOpenPdf] = useState<PublicShareFile | null>(null)
 
   useEffect(() => {
     getPublicShare(token).then((res) => (res.data ? setInfo(res.data) : setFatal(res.error)))
@@ -166,7 +170,12 @@ export function PublicShare() {
                 <span className="truncate font-[Inter,sans-serif] text-[14px] font-semibold text-[var(--dr-main-title)]">{f.name}</span>
                 <span className="font-[Karla,sans-serif] text-[12px] text-[var(--dr-main-subtitle)]">{formatSize(f.size)}</span>
               </div>
-              {f.viewable && (
+              {f.viewable && isPdf(f) ? (
+                <button onClick={() => setOpenPdf(f)} aria-label={`View ${f.name}`}
+                        className="rounded-full p-[8px] text-[var(--dr-main-subtitle)] hover:bg-[var(--dr-card-border)] hover:text-[var(--dr-main-title)]">
+                  <Eye size={17} />
+                </button>
+              ) : f.viewable && (
                 <a href={sharedFileUrl(token, access, f.id)} target="_blank" rel="noreferrer" aria-label={`View ${f.name}`}
                    className="rounded-full p-[8px] text-[var(--dr-main-subtitle)] hover:bg-[var(--dr-card-border)] hover:text-[var(--dr-main-title)]">
                   <Eye size={17} />
@@ -183,6 +192,15 @@ export function PublicShare() {
             </div>
           ))}
         </div>
+      )}
+      {openPdf && (
+        <PdfViewer
+          url={sharedFileUrl(token, access, openPdf.id)}
+          title={openPdf.name}
+          onClose={() => setOpenPdf(null)}
+          downloadUrl={info.allow_download ? sharedFileUrl(token, access, openPdf.id, true) : undefined}
+          trackUrl={sharedFilePagesUrl(token, access, openPdf.id)}
+        />
       )}
     </Shell>
   )

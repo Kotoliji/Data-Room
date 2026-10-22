@@ -1,3 +1,4 @@
+import io
 import mimetypes
 import uuid
 from pathlib import Path
@@ -9,6 +10,7 @@ from app import db
 from app.models import User, File, Folder
 from app.services.google_drive import download_file as drive_download, GOOGLE_MIME_EXPORT
 from app.constants import MAX_FILE_SIZE
+from app.services.watermark import watermark_pdf
 
 
 # Passive formats that are safe to render inline on our origin
@@ -33,8 +35,10 @@ def is_inline_viewable(record: File) -> bool:
     return served_mime(record) in INLINE_MIMES
 
 
-def send_stored_file(record: File, download: bool = False) -> Response | None:
+def send_stored_file(record: File, download: bool = False, watermark: str | None = None) -> Response | None:
     """Serve a stored file safely, or None if it is missing on disk.
+
+    With `watermark`, PDFs get the text burned into every page before they leave the server.
 
     Only passive formats render inline; everything else (HTML, SVG, Office...) is forced
     to download so uploaded content can never run scripts on our origin.
@@ -48,8 +52,14 @@ def send_stored_file(record: File, download: bool = False) -> Response | None:
 
     mime = served_mime(record)
     inline = mime in INLINE_MIMES and not download
+    source: str | io.BytesIO = str(path)
+    if watermark and mime == "application/pdf":
+        try:
+            source = io.BytesIO(watermark_pdf(path.read_bytes(), watermark))
+        except Exception:  # encrypted or malformed PDF — serve as-is rather than fail the viewer
+            current_app.logger.warning("Could not watermark file %s", record.id, exc_info=True)
     response = send_file(
-        str(path),
+        source,
         mimetype=mime if inline else "application/octet-stream",
         download_name=record.original_name,
         as_attachment=not inline,
