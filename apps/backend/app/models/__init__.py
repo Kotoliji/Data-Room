@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app import db
+from app.crypto import EncryptedText
 
 
 class User(db.Model):
@@ -14,8 +15,8 @@ class User(db.Model):
     password_hash: str = db.Column(db.String(256), nullable=False)
     location: str | None = db.Column(db.String(200), nullable=True)
     avatar_path: str | None = db.Column(db.String(500), nullable=True)
-    google_access_token: str | None = db.Column(db.Text, nullable=True)
-    google_refresh_token: str | None = db.Column(db.Text, nullable=True)
+    google_access_token: str | None = db.Column(EncryptedText, nullable=True)
+    google_refresh_token: str | None = db.Column(EncryptedText, nullable=True)
     google_token_expiry: datetime | None = db.Column(db.DateTime, nullable=True)
     google_connected: bool = db.Column(db.Boolean, default=False)
     created_at: datetime = db.Column(

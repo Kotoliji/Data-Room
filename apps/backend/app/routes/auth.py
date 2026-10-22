@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 from werkzeug.utils import secure_filename
 
-from app import db
+from app import db, limiter
 from app.models import User, Session, File, Folder, ActivityLog
 from app.services.email_service import send_reset_email
 from app.utils import require_auth, parse_device, generate_session_token
@@ -40,6 +40,7 @@ def _user_dict(user: User) -> dict:
 # --------------- Auth endpoints ---------------
 
 @auth_bp.route("/register", methods=["POST"])
+@limiter.limit("10 per hour")
 def register() -> tuple[Response, int]:
     data = request.get_json(silent=True) or {}
     name = data.get("name", "").strip()
@@ -63,7 +64,7 @@ def register() -> tuple[Response, int]:
         return jsonify({"data": None, "error": "Email already exists"}), 409
 
     ua = request.headers.get("User-Agent", "")
-    ip = request.headers.get("X-Forwarded-For", request.remote_addr) or "unknown"
+    ip = request.remote_addr or "unknown"
     session = Session(user_id=user.id, device=parse_device(ua), ip=ip)
     db.session.add(session)
     db.session.commit()
@@ -74,6 +75,7 @@ def register() -> tuple[Response, int]:
 
 
 @auth_bp.route("/login", methods=["POST"])
+@limiter.limit("10 per minute")
 def login() -> tuple[Response, int]:
     data = request.get_json(silent=True) or {}
     email = data.get("email", "").strip().lower()
@@ -84,7 +86,7 @@ def login() -> tuple[Response, int]:
         return jsonify({"data": None, "error": "Invalid email or password"}), 401
 
     ua = request.headers.get("User-Agent", "")
-    ip = request.headers.get("X-Forwarded-For", request.remote_addr) or "unknown"
+    ip = request.remote_addr or "unknown"
     session = Session(user_id=user.id, device=parse_device(ua), ip=ip)
     db.session.add(session)
     db.session.commit()
@@ -206,6 +208,7 @@ def get_avatar(user_id: int) -> tuple[Response, int] | Response:
 # --------------- Password reset endpoints ---------------
 
 @auth_bp.route("/forgot-password", methods=["POST"])
+@limiter.limit("5 per hour")
 def forgot_password() -> tuple[Response, int]:
     data = request.get_json(silent=True) or {}
     email = data.get("email", "").strip().lower()
@@ -237,6 +240,7 @@ def forgot_password() -> tuple[Response, int]:
 
 
 @auth_bp.route("/reset-password", methods=["POST"])
+@limiter.limit("10 per hour")
 def reset_password() -> tuple[Response, int]:
     data = request.get_json(silent=True) or {}
     token = data.get("token", "")
@@ -281,6 +285,7 @@ def reset_password() -> tuple[Response, int]:
 
 
 @auth_bp.route("/password", methods=["PUT"])
+@limiter.limit("10 per hour")
 @require_auth
 def change_password(user: User) -> tuple[Response, int]:
     data = request.get_json(silent=True) or {}

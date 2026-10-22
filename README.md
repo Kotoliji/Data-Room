@@ -8,18 +8,13 @@ A virtual Data Room MVP for securely storing and managing due diligence document
 
 **Live demo:** [https://virtuous-presence-production-6468.up.railway.app/](https://virtuous-presence-production-6468.up.railway.app/)
 
-A test account is pre-configured — no setup required.
-
-|                    |                             |
-| ------------------ | --------------------------- |
-| **Google Account** | `acmecorpsupport@gmail.com` |
-| **Password**       | `acmecorpsupport999`        |
+The Google OAuth app is in testing mode, so only approved test users can connect Drive. Credentials for a pre-filled demo Google account are shared privately on request — they are intentionally not published here.
 
 ### Step-by-step
 
-1. Open [https://AcmeCorp.app](https://AcmeCorp.app) and click **"Register"** to create a Data Room account (or use **"Sign in with Google"** with the account above)
+1. Open the live demo and click **"Register"** to create a Data Room account (or use **"Sign in with Google"**)
 2. Inside the Data Room, click **"Import"** → **"Upload from Google Drive"**
-3. Connect Google Drive — sign in with `acmecorpsupport@gmail.com` / `acmecorpsupport999`
+3. Connect Google Drive with the demo Google account (or your own account, if it is added as a test user)
 4. Browse folders, select files with checkboxes, click **"Import"**
 5. Files appear in your Data Room — click the eye icon to **view in browser**
 6. Try **renaming** (pencil icon), **moving** (drag & drop), and **deleting** (trash icon)
@@ -151,6 +146,14 @@ Per the assignment requirements, files are persisted on server disk at `backend/
 ### OAuth Token Security
 
 All Google OAuth tokens are stored server-side only — they are never sent to the frontend. The backend automatically refreshes expired access tokens using the stored refresh token. If the refresh token itself is revoked, the user is prompted to reconnect their Google Drive.
+
+Tokens are encrypted at rest with Fernet (AES-128 + HMAC); the key is derived from `TOKEN_ENCRYPTION_KEY` or `SECRET_KEY`. The app refuses to start without a strong `SECRET_KEY`.
+
+### Hardening
+
+- **Safe file viewing** — the MIME type is derived on the server from the file extension, never from the client's `Content-Type`. Only passive formats (PDF, images, plain text) render inline; HTML, SVG and everything else are forced to download, with `nosniff` and a sandboxing CSP, so an uploaded file can never run scripts on the app's origin.
+- **Rate limiting** — login, registration, password reset and Google code exchange are throttled per client IP (Flask-Limiter), with a JSON `429` response.
+- **Proxy-aware client IP** — `ProxyFix` trusts exactly one proxy hop, so the IP shown in active sessions cannot be spoofed with a forged `X-Forwarded-For` header.
 
 Signed tokens (via `itsdangerous`) are used for OAuth state parameters and Google login callbacks, preventing CSRF and state tampering attacks.
 

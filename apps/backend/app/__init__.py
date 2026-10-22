@@ -1,21 +1,29 @@
 import os
-from flask import Flask
+from flask import Flask, jsonify
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv()
 
 db = SQLAlchemy()
+limiter = Limiter(key_func=get_remote_address, storage_uri="memory://")
 
 
 def create_app() -> Flask:
     app = Flask(__name__, instance_relative_config=True)
 
-    secret = os.environ.get("SECRET_KEY", "dev-secret-key")
-    if secret == "dev-secret-key":
-        app.logger.warning("SECRET_KEY not set — using insecure default. Set it in .env!")
+    # Trust exactly one reverse proxy (Railway) for client IP and scheme
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
+    secret = os.environ.get("SECRET_KEY", "")
+    if len(secret) < 16:
+        raise RuntimeError("SECRET_KEY must be set (16+ chars) — see apps/backend/.env.example")
     app.config["SECRET_KEY"] = secret
+    app.config["TOKEN_ENCRYPTION_KEY"] = os.environ.get("TOKEN_ENCRYPTION_KEY", "")
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///dataroom.db")
     # Render uses postgres:// but SQLAlchemy needs postgresql://
     if app.config["SQLALCHEMY_DATABASE_URI"].startswith("postgres://"):
@@ -30,9 +38,14 @@ def create_app() -> Flask:
 
     CORS(app, origins=[app.config["FRONTEND_URL"]])
     db.init_app(app)
+    limiter.init_app(app)
 
     from app.routes import register_blueprints
     register_blueprints(app)
+
+    @app.errorhandler(429)
+    def too_many_requests(_e):  # type: ignore[no-untyped-def]
+        return jsonify({"data": None, "error": "Too many attempts — please try again later"}), 429
 
     with app.app_context():
         from app.models import User, Session  # noqa: F401
