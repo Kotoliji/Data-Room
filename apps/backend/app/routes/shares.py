@@ -7,7 +7,7 @@ from flask import Blueprint, Response, request, jsonify, current_app
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from app import db, limiter
-from app.models import User, File, Folder, ShareLink, ShareAccess, SharePageView
+from app.models import User, File, Folder, ShareLink, ShareAccess, SharePageView, Question
 from app.services.file_service import is_inline_viewable, send_stored_file, served_mime
 from app.utils import require_auth
 from app.constants import SHARE_ACCESS_TOKEN_MAX_AGE
@@ -374,3 +374,44 @@ def share_analytics(user: User, link_id: int) -> tuple[Response, int]:
         "documents": docs,
         "daily": [{"date": day, "events": n} for day, n in daily.items()],
     }, "error": None}), 200
+
+
+# --------------- Viewer Q&A ---------------
+
+@public_bp.route("/<token>/questions", methods=["GET"])
+def my_questions(token: str) -> tuple[Response, int]:
+    """A viewer sees only their own questions on this link, with any answers."""
+    link, email, error = _authorized_viewer(token)
+    if error:
+        return error
+    questions = (Question.query.filter_by(link_id=link.id, viewer_email=email)
+                 .order_by(Question.created_at.desc()).all())
+    return jsonify({"data": {"questions": [q.to_dict() for q in questions]}, "error": None}), 200
+
+
+@public_bp.route("/<token>/questions", methods=["POST"])
+@limiter.limit("20 per hour")
+def ask_question(token: str) -> tuple[Response, int]:
+    link, email, error = _authorized_viewer(token)
+    if error:
+        return error
+    data = request.get_json(silent=True) or {}
+    body = str(data.get("body", "")).strip()
+    if not 3 <= len(body) <= 2000:
+        return jsonify({"data": None, "error": "Question must be between 3 and 2000 characters"}), 400
+
+    record = None
+    if data.get("file_id") is not None:
+        record = db.session.get(File, data["file_id"]) if isinstance(data["file_id"], int) else None
+        if not record or not _file_in_scope(link, record):
+            return jsonify({"data": None, "error": "File not found"}), 404
+    page = data.get("page")
+    if page is not None and (not isinstance(page, int) or page < 1 or record is None):
+        return jsonify({"data": None, "error": "Invalid page"}), 400
+
+    question = Question(link_id=link.id, user_id=link.user_id, viewer_email=email, body=body,
+                        file_id=record.id if record else None, file_name=record.original_name if record else None,
+                        page=page)
+    db.session.add(question)
+    db.session.commit()
+    return jsonify({"data": question.to_dict(), "error": None}), 201

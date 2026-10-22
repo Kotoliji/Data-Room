@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Download, Loader2, Minus, Plus, X } from "lucide-react"
+import { Download, Loader2, MessageCircleQuestion, Minus, Plus, X } from "lucide-react"
 import * as pdfjs from "pdfjs-dist"
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist"
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url"
@@ -16,6 +16,8 @@ interface PdfViewerProps {
   downloadUrl?: string
   /** When set, seconds spent on each page are reported here (shared-link viewers only). */
   trackUrl?: string
+  /** When set, shows an "Ask" button that reports the page being read. */
+  onAsk?: (page: number) => void
 }
 
 function PdfPage({ doc, pageNumber, scale, width, height, onVisibility }: {
@@ -71,7 +73,7 @@ function PdfPage({ doc, pageNumber, scale, width, height, onVisibility }: {
   )
 }
 
-export function PdfViewer({ url, title, onClose, downloadUrl, trackUrl }: PdfViewerProps) {
+export function PdfViewer({ url, title, onClose, downloadUrl, trackUrl, onAsk }: PdfViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -164,6 +166,11 @@ export function PdfViewer({ url, title, onClose, downloadUrl, trackUrl }: PdfVie
             <Plus size={15} />
           </button>
         </div>
+        {onAsk && (
+          <button onClick={() => onAsk(currentPage)} className="flex items-center gap-1 rounded-[10px] bg-white/10 px-3 py-[6px] font-[Inter,sans-serif] text-[12px] font-semibold hover:bg-white/20">
+            <MessageCircleQuestion size={15} /> <span className="hidden sm:inline">Ask about this page</span>
+          </button>
+        )}
         {downloadUrl && (
           <a href={downloadUrl} aria-label="Download" className="rounded-full p-[8px] hover:bg-white/10">
             <Download size={17} />

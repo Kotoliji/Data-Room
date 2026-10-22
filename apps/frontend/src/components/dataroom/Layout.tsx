@@ -6,6 +6,7 @@ import { FileListView } from "./FileListView"
 import { ActivityView } from "./ActivityView"
 import { SharingView } from "./SharingView"
 import { DiligenceView } from "./DiligenceView"
+import { QAView } from "./QAView"
 import { ShareDialog } from "./ShareDialog"
 import type { UploadedFile, FolderItem } from "@/lib/types"
 import { SearchBar } from "./SearchBar"
@@ -411,6 +412,8 @@ export function Layout() {
             <SharingView />
           ) : activeTab === "Diligence" ? (
             <DiligenceView />
+          ) : activeTab === "Q&A" ? (
+            <QAView />
           ) : displayFiles.length > 0 || subfolders.length > 0 || canHaveSubfolders ? (
             <FileListView
               folderName={folderDisplayName}

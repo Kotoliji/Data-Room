@@ -261,3 +261,41 @@ class DiligenceReview(db.Model):
     created_at: datetime = db.Column(
         db.DateTime, default=lambda: datetime.now(timezone.utc)
     )
+
+
+class Question(db.Model):
+    """A question an external viewer asked through a share link, and the owner's answer."""
+
+    __tablename__ = "questions"
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    link_id: int = db.Column(db.Integer, db.ForeignKey("share_links.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: int = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)  # room owner
+    viewer_email: str = db.Column(db.String(120), nullable=False)
+    file_id: int | None = db.Column(db.Integer, nullable=True)  # no FK: questions outlive deleted files
+    file_name: str | None = db.Column(db.String(255), nullable=True)
+    page: int | None = db.Column(db.Integer, nullable=True)
+    body: str = db.Column(db.Text, nullable=False)
+    answer: str | None = db.Column(db.Text, nullable=True)
+    answered_at: datetime | None = db.Column(db.DateTime, nullable=True)
+    created_at: datetime = db.Column(
+        db.DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+
+    link = db.relationship("ShareLink", backref=db.backref("questions", cascade="all, delete-orphan", lazy="dynamic"))
+
+    def to_dict(self, for_owner: bool = False) -> dict:
+        data = {
+            "id": self.id,
+            "file_id": self.file_id,
+            "file_name": self.file_name,
+            "page": self.page,
+            "body": self.body,
+            "answer": self.answer,
+            "status": "answered" if self.answer else "open",
+            "answered_at": self.answered_at.isoformat() if self.answered_at else None,
+            "created_at": self.created_at.isoformat(),
+        }
+        if for_owner:
+            data.update(viewer_email=self.viewer_email, link_id=self.link_id, link_name=self.link.name)
+        return data

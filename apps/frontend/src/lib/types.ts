@@ -213,3 +213,27 @@ export interface SharePreview {
   total: number
   flagged: { id: number; name: string; sensitive: SensitiveFlag[] }[]
 }
+
+export interface Question {
+  id: number
+  file_id: number | null
+  file_name: string | null
+  page: number | null
+  body: string
+  answer: string | null
+  status: "open" | "answered"
+  answered_at: string | null
+  created_at: string
+}
+
+export interface OwnerQuestion extends Question {
+  viewer_email: string
+  link_id: number
+  link_name: string
+}
+
+export interface DraftAnswer {
+  answer: string
+  citations: { file_id: number; file_name: string; quote: string }[]
+  source: "claude" | "heuristic"
+}

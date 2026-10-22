@@ -36,6 +36,7 @@ The Google OAuth app is in testing mode, so only approved test users can connect
 | In-app PDF viewer        | Click any PDF — zoom, page counter, lazy page rendering          |
 | AI due diligence         | "Diligence" tab → checklist coverage, Run AI review             |
 | Search inside documents  | Type 3+ characters in search — matches in file text are tagged   |
+| Buyer Q&A                | Shared link → Questions (or "Ask about this page" in the viewer); owner answers in the Q&A tab with an AI draft |
 | Google Sign-In           | Use the Google button on login/register pages                   |
 
 ---
@@ -79,7 +80,7 @@ Open `http://localhost:5173` in your browser.
 ```bash
 cd apps/backend
 pip install -r requirements-dev.txt
-pytest -q          # 45 tests: auth, files, folders/trash, sharing scope, Drive import (mocked), security, migrations
+pytest -q          # 51 tests: auth, files, folders/trash, sharing scope, Drive import (mocked), security, migrations
 ```
 
 GitHub Actions runs backend tests plus frontend lint and build on every push and pull request.
@@ -154,6 +155,7 @@ BACKEND_URL=http://localhost:5000
 - **In-app PDF viewer** (pdf.js, lazy-loaded) with **page-level engagement tracking**: owners see time spent per page as a heatmap, the most engaged viewers and 14-day activity
 - **AI due diligence** (Claude): every document is classified into a standard DD category with a one-line summary and sensitive-data flags; the room is scored against a 16-item M&A checklist with evidence per item; sharing warns before exposing sensitive files
 - **Full-text search** inside PDF, DOCX, XLSX, PPTX and TXT documents
+- **Buyer–seller Q&A**: viewers ask about the room or a specific page; owners answer with AI drafts whose citations are verified against the source text
 - **Dynamic watermarking** — every PDF served through a share link has the viewer's email and date burned into each page on the server
 - **Nested folder system** with unlimited depth, breadcrumb navigation, drag & drop
 - **Activity log** tracking all file operations per folder
@@ -250,6 +252,13 @@ Implementation notes:
 - Refusals, `max_tokens` and API errors (rate limits, 5xx, network) are handled explicitly. Each one degrades to the heuristic path instead of failing the upload.
 - Classification sends only the first 15k characters of a document: the opening pages identify it, and cost per file stays bounded. The full text is still stored for search.
 - **Without `ANTHROPIC_API_KEY`** the same features run on keyword and regex heuristics, labelled as such in the UI. Tests and local development never call the API.
+
+### Buyer–Seller Q&A
+
+- Viewers ask from the shared page or from the PDF viewer with **"Ask about this page"**, which attaches the file and the page they are reading. Each viewer sees only their own questions and the answers to them.
+- Owners work through an Open / Answered inbox. **Draft with AI** builds a reply from the three most relevant documents, ranked with the asked-about file first and then by word overlap with the question.
+- **Scope-safe drafting.** Drafts only read documents inside the asking viewer's share link. An answer can never quote a file that this buyer is not allowed to see.
+- **Verified citations.** Every quote Claude returns is checked against the stored document text, ignoring whitespace. Invented quotes and unknown file ids are dropped before the owner sees the draft. Without an API key, the draft falls back to keyword-matched passages.
 
 ### Activity Log
 
@@ -374,6 +383,16 @@ The application uses server-signed Bearer tokens for API authentication:
 | `POST` | `/api/v1/diligence/analyze`  | Classify documents that predate analysis or failed       |
 | `GET`  | `/api/v1/files/search?q=`    | Full-text search inside documents, with snippets         |
 
+### Q&A
+
+| Method | Endpoint                                   | Description                                      |
+| ------ | ------------------------------------------ | ------------------------------------------------ |
+| `GET`  | `/api/v1/public/shares/:token/questions`   | Viewer's own questions and answers               |
+| `POST` | `/api/v1/public/shares/:token/questions`   | Ask (optionally about a file and page)           |
+| `GET`  | `/api/v1/questions?status=open\|answered`  | Owner inbox with open count                      |
+| `POST` | `/api/v1/questions/:id/draft`              | AI draft grounded in the viewer's scope, verified citations |
+| `POST` | `/api/v1/questions/:id/answer`             | Publish the answer to the viewer                 |
+
 ### Activity
 
 | Method   | Endpoint           | Description                             |
@@ -449,4 +468,9 @@ DocumentInsight                    (one per file)
 
 DiligenceReview
 └── id, user_id, result (JSON checklist), source, created_at
+
+Question
+├── id, link_id, user_id (owner), viewer_email
+├── file_id, file_name, page (optional context)
+└── body, answer, answered_at, created_at
 ```

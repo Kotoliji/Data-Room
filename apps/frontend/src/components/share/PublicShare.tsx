@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react"
 import { useParams } from "react-router-dom"
-import { ChevronRight, Download, Eye, FileText, Folder, Loader2, Lock, ShieldCheck } from "lucide-react"
+import { ChevronRight, Download, Eye, FileText, Folder, Loader2, Lock, MessageCircleQuestion, ShieldCheck } from "lucide-react"
 import type { PublicShareContents, PublicShareFile, PublicShareInfo } from "@/lib/types"
 import { getPublicShare, getShareContents, sharedFilePagesUrl, sharedFileUrl, unlockShare } from "@/lib/api"
 import { LazyPdfViewer as PdfViewer } from "@/components/viewer/LazyPdfViewer"
+import { QuestionsPanel, type QuestionContext } from "./QuestionsPanel"
 import { formatSize } from "@/lib/utils"
 
 const isPdf = (f: PublicShareFile) => f.mime_type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf")
@@ -82,6 +83,7 @@ export function PublicShare() {
   const [folderId, setFolderId] = useState<number | undefined>(undefined)
   const [contents, setContents] = useState<PublicShareContents | null>(null)
   const [openPdf, setOpenPdf] = useState<PublicShareFile | null>(null)
+  const [questions, setQuestions] = useState<{ context?: QuestionContext } | null>(null)
 
   useEffect(() => {
     getPublicShare(token).then((res) => (res.data ? setInfo(res.data) : setFatal(res.error)))
@@ -134,7 +136,8 @@ export function PublicShare() {
 
   return (
     <Shell>
-      <div className="mb-5 flex flex-wrap items-center gap-1 font-[Inter,sans-serif] text-[15px] font-semibold text-[var(--dr-main-subtitle)]">
+      <div className="mb-5 flex items-start justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-1 font-[Inter,sans-serif] text-[15px] font-semibold text-[var(--dr-main-subtitle)]">
         <button onClick={() => openFolder(undefined)} className="text-[20px] font-bold text-[var(--dr-main-title)] hover:underline md:text-[24px]">
           {info.name}
         </button>
@@ -144,6 +147,13 @@ export function PublicShare() {
             <button onClick={() => openFolder(p.id)} className="hover:text-[var(--dr-main-title)]">{p.name}</button>
           </span>
         ))}
+      </div>
+        <button
+          onClick={() => setQuestions({})}
+          className="flex shrink-0 items-center gap-2 rounded-[10px] border border-[var(--dr-card-border)] px-3 py-[6px] font-[Inter,sans-serif] text-[13px] font-semibold text-[var(--dr-main-title)] hover:bg-[var(--dr-card-border)]/40"
+        >
+          <MessageCircleQuestion size={15} /> Questions
+        </button>
       </div>
 
       {!contents ? (
@@ -200,7 +210,11 @@ export function PublicShare() {
           onClose={() => setOpenPdf(null)}
           downloadUrl={info.allow_download ? sharedFileUrl(token, access, openPdf.id, true) : undefined}
           trackUrl={sharedFilePagesUrl(token, access, openPdf.id)}
+          onAsk={(page) => setQuestions({ context: { fileId: openPdf.id, fileName: openPdf.name, page } })}
         />
+      )}
+      {questions && (
+        <QuestionsPanel token={token} access={access} context={questions.context} onClose={() => setQuestions(null)} />
       )}
     </Shell>
   )

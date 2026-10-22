@@ -262,3 +262,87 @@ def claude_review(files: list[File]) -> list[dict] | None:
         if i["id"] in by_id else {"id": i["id"], "status": "missing", "evidence_file_ids": [], "note": "Not assessed"}
         for i in CHECKLIST
     ]
+
+
+# --------------- Q&A answer drafts ---------------
+
+DRAFT_DOC_CHARS = 12_000
+_DRAFT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "answer": {"type": "string", "description": "Draft reply to the buyer, 2-6 sentences, factual, no speculation"},
+        "citations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "file_id": {"type": "integer"},
+                    "quote": {"type": "string", "description": "Verbatim sentence copied from that document"},
+                },
+                "required": ["file_id", "quote"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["answer", "citations"],
+    "additionalProperties": False,
+}
+
+
+def _norm(text: str) -> str:
+    return " ".join(text.split()).lower()
+
+
+def _keywords(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-zA-Z]{4,}", text.lower())}
+
+
+def rank_documents(question: str, files: list[File], pinned_id: int | None, limit: int = 3) -> list[File]:
+    """The asked-about file first, then the files sharing the most words with the question."""
+    words = _keywords(question)
+    with_text = [f for f in files if f.insight and f.insight.text]
+    scored = sorted(with_text, key=lambda f: -len(words & _keywords(f.insight.text[:DRAFT_DOC_CHARS])))
+    pinned = [f for f in with_text if f.id == pinned_id]
+    return (pinned + [f for f in scored if f.id != pinned_id])[:limit]
+
+
+def _heuristic_draft(question: str, docs: list[File]) -> dict:
+    words = _keywords(question)
+    citations = []
+    for f in docs:
+        for sentence in re.split(r"(?<=[.!?])\s+", " ".join(f.insight.text.split())):
+            if len(words & _keywords(sentence)) >= 2 and len(sentence) < 400:
+                citations.append({"file_id": f.id, "quote": sentence})
+                break
+    answer = ("Thank you for the question. The relevant information is in the documents cited below."
+              if citations else "Thank you for the question. We will review it and follow up with the relevant documents.")
+    return {"answer": answer, "citations": citations}
+
+
+def draft_answer(question: str, page: int | None, docs: list[File]) -> dict:
+    """Draft a seller-side answer grounded in `docs`; every citation is verified against the source text."""
+    result = None
+    if ai_enabled() and docs:
+        context = "\n\n".join(
+            f'<document id="{f.id}" name="{f.original_name}">\n{f.insight.text[:DRAFT_DOC_CHARS]}\n</document>' for f in docs
+        )
+        result = _ask_claude(
+            system=(
+                "You help a company selling itself answer buyer questions in an M&A data room. Draft a concise, "
+                "professional reply using only the documents provided. If they do not answer the question, say what "
+                "information is missing instead of guessing. Cite the sentences you relied on, copied verbatim."
+            ),
+            content=f"{context}\n\nBuyer question{f' (about page {page})' if page else ''}:\n{question}",
+            schema=_DRAFT_SCHEMA,
+            max_tokens=4096,
+        )
+    source = "claude" if result else "heuristic"
+    result = result or _heuristic_draft(question, docs)
+
+    texts = {f.id: (f.original_name, _norm(f.insight.text)) for f in docs}
+    verified = [
+        {"file_id": c["file_id"], "file_name": texts[c["file_id"]][0], "quote": c["quote"]}
+        for c in result["citations"]
+        if c["file_id"] in texts and _norm(c["quote"]) in texts[c["file_id"]][1]
+    ]
+    return {"answer": result["answer"], "citations": verified, "source": source}

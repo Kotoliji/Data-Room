@@ -1,4 +1,4 @@
-import type { ApiResponse, User, AuthResponse, RegisterPayload, LoginPayload, MessageResponse, UpdateProfilePayload, Session, UploadedFile, DriveFilesResponse, DriveImportResponse, DriveFile, ActivityEntry, FolderItem, ShareLink, CreateSharePayload, ShareAccessEntry, PublicShareInfo, PublicShareContents, ShareAnalytics, DiligenceOverview, SharePreview } from "./types"
+import type { ApiResponse, User, AuthResponse, RegisterPayload, LoginPayload, MessageResponse, UpdateProfilePayload, Session, UploadedFile, DriveFilesResponse, DriveImportResponse, DriveFile, ActivityEntry, FolderItem, ShareLink, CreateSharePayload, ShareAccessEntry, PublicShareInfo, PublicShareContents, ShareAnalytics, DiligenceOverview, SharePreview, Question, OwnerQuestion, DraftAnswer } from "./types"
 
 export const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5000"
 const BASE_URL = `${API_BASE}/api/v1`
@@ -328,4 +328,33 @@ export function searchContent(q: string): Promise<ApiResponse<{ results: { file_
 
 export function getSharePreview(folderId: number | null): Promise<ApiResponse<SharePreview>> {
   return request<SharePreview>(`/shares/preview${folderId != null ? `?folder_id=${folderId}` : ""}`, { method: "GET" })
+}
+
+// --------------- Q&A ---------------
+
+export function getMyQuestions(token: string, access: string): Promise<ApiResponse<{ questions: Question[] }>> {
+  return request<{ questions: Question[] }>(`/public/shares/${token}/questions`, {
+    method: "GET",
+    headers: { "X-Share-Access": access },
+  })
+}
+
+export function askQuestion(token: string, access: string, body: string, fileId?: number, page?: number): Promise<ApiResponse<Question>> {
+  return request<Question>(`/public/shares/${token}/questions`, {
+    method: "POST",
+    headers: { "X-Share-Access": access },
+    body: JSON.stringify({ body, file_id: fileId, page }),
+  })
+}
+
+export function getQuestions(status: "open" | "answered"): Promise<ApiResponse<{ questions: OwnerQuestion[]; open_count: number }>> {
+  return request<{ questions: OwnerQuestion[]; open_count: number }>(`/questions?status=${status}`, { method: "GET" })
+}
+
+export function answerQuestion(id: number, answer: string): Promise<ApiResponse<OwnerQuestion>> {
+  return request<OwnerQuestion>(`/questions/${id}/answer`, { method: "POST", body: JSON.stringify({ answer }) })
+}
+
+export function draftAnswer(id: number): Promise<ApiResponse<DraftAnswer>> {
+  return request<DraftAnswer>(`/questions/${id}/draft`, { method: "POST" })
 }

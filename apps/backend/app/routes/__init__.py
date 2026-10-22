@@ -10,6 +10,7 @@ def register_blueprints(app: Flask) -> None:
     from .folders import folders_bp
     from .shares import shares_bp, public_bp
     from .diligence import diligence_bp
+    from .questions import questions_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/v1/auth")
     app.register_blueprint(google_bp, url_prefix="/api/v1/auth")
@@ -20,3 +21,4 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(shares_bp, url_prefix="/api/v1/shares")
     app.register_blueprint(public_bp, url_prefix="/api/v1/public/shares")
     app.register_blueprint(diligence_bp, url_prefix="/api/v1")
+    app.register_blueprint(questions_bp, url_prefix="/api/v1/questions")
