@@ -8,7 +8,7 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
-from app import db
+from app import db, limiter
 from app.models import User, Session
 from app.utils import require_auth, parse_device, generate_session_token
 from app.constants import GOOGLE_AUTH_URI, GOOGLE_TOKEN_URI, OAUTH_STATE_MAX_AGE, GOOGLE_AUTH_VERIFY_MAX_AGE
@@ -219,7 +219,7 @@ def google_login_callback() -> Response:
 
     # Create session and log in
     ua = request.headers.get("User-Agent", "")
-    ip = request.headers.get("X-Forwarded-For", request.remote_addr) or "unknown"
+    ip = request.remote_addr or "unknown"
     session = Session(user_id=user.id, device=parse_device(ua), ip=ip)
     db.session.add(session)
     db.session.commit()
@@ -248,6 +248,7 @@ def google_login_callback() -> Response:
 
 
 @google_bp.route("/google/exchange", methods=["POST"])
+@limiter.limit("20 per minute")
 def google_exchange() -> tuple[Response, int]:
     """Exchange a one-time Google login code for user data + auth token."""
     body = request.get_json(silent=True) or {}

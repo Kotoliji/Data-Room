@@ -39,6 +39,16 @@ def get_user_from_header() -> User | None:
     return db.session.get(User, user_id)
 
 
+def is_demo_account(user: User) -> bool:
+    """The public demo login must stay usable for everyone, so account-level changes are blocked."""
+    from app.demo import DEMO_EMAIL
+    return bool(current_app.config.get("DEMO_SEED")) and user.email == DEMO_EMAIL
+
+
+def demo_locked():
+    return jsonify({"data": None, "error": "This is disabled for the shared demo account"}), 403
+
+
 def require_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):

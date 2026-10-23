@@ -1,8 +1,10 @@
 from flask import Blueprint, Response, request, jsonify, current_app
 
 from app import db
-from app.models import User, Folder, File
+from app.models import User, Folder, File, ShareLink
 from app.utils import require_auth
+from app.services.activity_service import log_activity
+from app.services.file_service import remove_file
 
 folders_bp = Blueprint("folders", __name__)
 
@@ -141,14 +143,25 @@ def delete_folder_permanent(user: User, folder_id: int) -> tuple[Response, int]:
     if not folder:
         return jsonify({"data": None, "error": "Folder not found"}), 404
 
-    def delete_recursive(fid: int) -> None:
-        children = Folder.query.filter_by(parent_id=fid, user_id=user.id).all()
-        for child in children:
-            delete_recursive(child.id)
-            db.session.delete(child)
+    # Collect the whole subtree first, then remove its files (DB + disk) and folders
+    subtree = [folder]
+    i = 0
+    while i < len(subtree):
+        subtree.extend(Folder.query.filter_by(parent_id=subtree[i].id, user_id=user.id).all())
+        i += 1
+    keys = [f"folder:{f.id}" for f in subtree]
 
-    delete_recursive(folder_id)
-    db.session.delete(folder)
+    files = File.query.filter(
+        File.user_id == user.id,
+        db.or_(File.folder_id.in_(keys), File.original_folder_id.in_(keys)),
+    ).all()
+    for record in files:
+        remove_file(user, record)
+    for link in ShareLink.query.filter(ShareLink.folder_id.in_([f.id for f in subtree])).all():
+        db.session.delete(link)  # ORM cascade removes its access trail too
+    for f in reversed(subtree):
+        db.session.delete(f)
+    log_activity(user.id, "deleted", folder.name, details=f"folder with {len(files)} file(s)")
     db.session.commit()
 
     current_app.logger.info("Permanently deleted folder %d for user %s", folder_id, user.id)

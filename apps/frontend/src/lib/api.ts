@@ -1,4 +1,4 @@
-import type { ApiResponse, User, AuthResponse, RegisterPayload, LoginPayload, MessageResponse, UpdateProfilePayload, Session, UploadedFile, DriveFilesResponse, DriveImportResponse, DriveFile, ActivityEntry, FolderItem } from "./types"
+import type { ApiResponse, User, AuthResponse, RegisterPayload, LoginPayload, MessageResponse, UpdateProfilePayload, Session, UploadedFile, DriveFilesResponse, DriveImportResponse, DriveFile, ActivityEntry, FolderItem, ShareLink, CreateSharePayload, ShareAccessEntry, PublicShareInfo, PublicShareContents, ShareAnalytics, DiligenceOverview, SharePreview, Question, OwnerQuestion, DraftAnswer } from "./types"
 
 export const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5000"
 const BASE_URL = `${API_BASE}/api/v1`
@@ -250,4 +250,111 @@ export function getTrashedFolders(): Promise<ApiResponse<{ folders: FolderItem[]
 
 export function getFolderPath(folderId: number): Promise<ApiResponse<{ path: FolderItem[] }>> {
   return request<{ path: FolderItem[] }>(`/folders/${folderId}/path`, { method: "GET" })
+}
+
+// --------------- Sharing (owner) ---------------
+
+export function getShares(): Promise<ApiResponse<{ shares: ShareLink[] }>> {
+  return request<{ shares: ShareLink[] }>("/shares", { method: "GET" })
+}
+
+export function createShare(payload: CreateSharePayload): Promise<ApiResponse<ShareLink>> {
+  return request<ShareLink>("/shares", { method: "POST", body: JSON.stringify(payload) })
+}
+
+export function revokeShare(linkId: number): Promise<ApiResponse<ShareLink>> {
+  return request<ShareLink>(`/shares/${linkId}`, { method: "DELETE" })
+}
+
+export function getShareAccesses(linkId: number): Promise<ApiResponse<{ accesses: ShareAccessEntry[] }>> {
+  return request<{ accesses: ShareAccessEntry[] }>(`/shares/${linkId}/accesses`, { method: "GET" })
+}
+
+export function getShareAnalytics(linkId: number): Promise<ApiResponse<ShareAnalytics>> {
+  return request<ShareAnalytics>(`/shares/${linkId}/analytics`, { method: "GET" })
+}
+
+export function shareUrl(token: string): string {
+  return `${window.location.origin}/s/${token}`
+}
+
+// --------------- Sharing (external viewer) ---------------
+
+export function getPublicShare(token: string): Promise<ApiResponse<PublicShareInfo>> {
+  return request<PublicShareInfo>(`/public/shares/${token}`, { method: "GET" })
+}
+
+export function unlockShare(token: string, email: string, password: string): Promise<ApiResponse<{ access_token: string }>> {
+  return request<{ access_token: string }>(`/public/shares/${token}/unlock`, {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  })
+}
+
+export function getShareContents(token: string, access: string, folderId?: number): Promise<ApiResponse<PublicShareContents>> {
+  const query = folderId != null ? `?folder_id=${folderId}` : ""
+  return request<PublicShareContents>(`/public/shares/${token}/contents${query}`, {
+    method: "GET",
+    headers: { "X-Share-Access": access },
+  })
+}
+
+export function sharedFileUrl(token: string, access: string, fileId: number, download = false): string {
+  const params = new URLSearchParams({ access, ...(download ? { download: "1" } : {}) })
+  return `${BASE_URL}/public/shares/${token}/files/${fileId}?${params}`
+}
+
+export function sharedFilePagesUrl(token: string, access: string, fileId: number): string {
+  return `${BASE_URL}/public/shares/${token}/files/${fileId}/pages?${new URLSearchParams({ access })}`
+}
+
+// --------------- Due diligence (AI) ---------------
+
+export function getDiligence(): Promise<ApiResponse<DiligenceOverview>> {
+  return request<DiligenceOverview>("/diligence", { method: "GET" })
+}
+
+export function runDiligenceReview(): Promise<ApiResponse<DiligenceOverview>> {
+  return request<DiligenceOverview>("/diligence/review", { method: "POST" })
+}
+
+export function analyzeUnprocessed(): Promise<ApiResponse<{ queued: number }>> {
+  return request<{ queued: number }>("/diligence/analyze", { method: "POST" })
+}
+
+export function searchContent(q: string): Promise<ApiResponse<{ results: { file_id: number; snippet: string }[] }>> {
+  return request<{ results: { file_id: number; snippet: string }[] }>(`/files/search?q=${encodeURIComponent(q)}`, { method: "GET" })
+}
+
+export function getSharePreview(folderId: number | null): Promise<ApiResponse<SharePreview>> {
+  return request<SharePreview>(`/shares/preview${folderId != null ? `?folder_id=${folderId}` : ""}`, { method: "GET" })
+}
+
+// --------------- Q&A ---------------
+
+export function getMyQuestions(token: string, access: string): Promise<ApiResponse<{ questions: Question[] }>> {
+  return request<{ questions: Question[] }>(`/public/shares/${token}/questions`, {
+    method: "GET",
+    headers: { "X-Share-Access": access },
+  })
+}
+
+export function askQuestion(token: string, access: string, body: string, fileId?: number, page?: number): Promise<ApiResponse<Question>> {
+  return request<Question>(`/public/shares/${token}/questions`, {
+    method: "POST",
+    headers: { "X-Share-Access": access },
+    body: JSON.stringify({ body, file_id: fileId, page }),
+  })
+}
+
+export function getQuestions(status: "open" | "answered"): Promise<ApiResponse<{ questions: OwnerQuestion[]; open_count: number }>> {
+  return request<{ questions: OwnerQuestion[]; open_count: number }>(`/questions?status=${status}`, { method: "GET" })
+}
+
+export function answerQuestion(id: number, answer: string): Promise<ApiResponse<OwnerQuestion>> {
+  return request<OwnerQuestion>(`/questions/${id}/answer`, { method: "POST", body: JSON.stringify({ answer }) })
+}
+
+export function draftAnswer(id: number): Promise<ApiResponse<DraftAnswer>> {
+  return request<DraftAnswer>(`/questions/${id}/draft`, { method: "POST" })
 }

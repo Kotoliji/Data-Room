@@ -1,7 +1,9 @@
-import { Check, Trash2, X, Pencil, Eye, Folder, ChevronRight, ChevronLeft, FolderPlus, RotateCcw } from "lucide-react"
+import { Check, Trash2, X, Pencil, Eye, Folder, ChevronRight, ChevronLeft, FolderPlus, RotateCcw, Share2 } from "lucide-react"
 import { useState, useRef, useCallback } from "react"
 import type { UploadedFile, FolderItem } from "@/lib/types"
 import { getFileViewUrl } from "@/lib/api"
+import { LazyPdfViewer as PdfViewer } from "@/components/viewer/LazyPdfViewer"
+import { InsightBadges } from "./InsightBadges"
 import { formatSize } from "@/lib/utils"
 import { DeleteFolderModal } from "./DeleteFolderModal"
 import { triggerTrashAnimation } from "./TrashAnimation"
@@ -10,6 +12,7 @@ interface FileListViewProps {
   folderName: string
   files: (UploadedFile | { id: string; original_name: string; size: number; status: "uploading" })[]
   onImport: () => void
+  onShare?: () => void
   onDeleteFile: (fileId: number) => void
   onTrashFile?: (fileId: number) => void
   onRenameFile?: (fileId: number, newName: string) => void
@@ -23,6 +26,8 @@ interface FileListViewProps {
   onRenameSubfolder?: (folderId: number, name: string) => void
   onMoveFileToSubfolder?: (fileId: number, folderId: string) => void
   currentFolderId?: string
+  /** Content-search snippets keyed by file id */
+  snippets?: Record<number, string>
 }
 
 function LoadingDots() {
@@ -297,10 +302,10 @@ function Breadcrumb({ folderName, path, onNavigate }: {
 }
 
 export function FileListView({
-  folderName, files, onImport, onDeleteFile, onTrashFile, onRenameFile,
+  folderName, files, onImport, onShare, onDeleteFile, onTrashFile, onRenameFile,
   subfolders = [], folderPath = [],
   onNavigateFolder, onCreateSubfolder, onDeleteSubfolder, onRestoreSubfolder, onRenameSubfolder, onMoveFileToSubfolder,
-  currentFolderId,
+  currentFolderId, snippets = {},
 }: FileListViewProps) {
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null)
   const [deleteFolderTarget, setDeleteFolderTarget] = useState<FolderItem | null>(null)
@@ -311,6 +316,18 @@ export function FileListView({
   const [dragOverFolderId, setDragOverFolderId] = useState<number | null>(null)
   const [dragOverContainer, setDragOverContainer] = useState(false)
   const isTrash = folderName === "Trash"
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; name: string } | null>(null)
+
+  // PDFs open in the in-app viewer; other formats keep the browser's native handling
+  const openFile = async (file: UploadedFile) => {
+    const url = await getFileViewUrl(file.id)
+    if (!url) return
+    if (file.mime_type === "application/pdf" || file.original_name.toLowerCase().endsWith(".pdf")) {
+      setPdfPreview({ url, name: file.original_name })
+    } else {
+      window.open(url, "_blank")
+    }
+  }
 
   const hasSubfolders = subfolders.length > 0
   const hasFiles = files.length > 0
@@ -368,6 +385,15 @@ export function FileListView({
               >
                 <FolderPlus className="size-[16px]" />
                 <span className="hidden md:inline">New folder</span>
+              </button>
+            )}
+            {onShare && (
+              <button
+                onClick={onShare}
+                className="flex shrink-0 items-center gap-[6px] rounded-[12px] border-2 border-white bg-white px-[8px] py-[6px] font-[Inter,sans-serif] text-[13px] font-semibold text-[#141718] transition-colors hover:bg-[#f3f5f7] md:px-[16px] md:py-[10px] md:text-[14px]"
+              >
+                <Share2 className="size-[16px]" />
+                <span className="hidden md:inline">Share</span>
               </button>
             )}
             <button
@@ -478,15 +504,13 @@ export function FileListView({
             ) : (
               <span
                 className="flex-1 cursor-pointer truncate font-[Inter,sans-serif] text-[14px] font-semibold leading-[24px] tracking-[-0.28px] text-[var(--dr-main-title)] hover:underline"
-                onClick={async () => {
-                  if (file.status !== "uploading") {
-                    const url = await getFileViewUrl(file.id as number)
-                    if (url) window.open(url, "_blank")
-                  }
-                }}
+                onClick={() => { if (file.status !== "uploading") openFile(file as UploadedFile) }}
               >
                 {file.original_name}
               </span>
+            )}
+            {renameTarget?.id !== file.id && file.status !== "uploading" && (
+              <InsightBadges insight={(file as UploadedFile).insight} snippet={snippets[file.id as number]} />
             )}
 
             {file.status === "uploading" ? (
@@ -497,7 +521,7 @@ export function FileListView({
                   {formatSize(file.size)}
                 </span>
                 <button
-                  onClick={async () => { const url = await getFileViewUrl(file.id as number); if (url) window.open(url, "_blank") }}
+                  onClick={() => openFile(file as UploadedFile)}
                   className="hidden shrink-0 rounded-md p-1 text-[#6c7275] transition-colors hover:bg-[#f3f5f7] hover:text-[#2752f4] md:block"
                   title="View file"
                 >
@@ -583,6 +607,8 @@ export function FileListView({
           onCancel={() => setDeleteFolderTarget(null)}
         />
       )}
+
+      {pdfPreview && <PdfViewer url={pdfPreview.url} title={pdfPreview.name} onClose={() => setPdfPreview(null)} />}
     </div>
   )
 }

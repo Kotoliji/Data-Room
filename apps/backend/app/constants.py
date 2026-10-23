@@ -7,6 +7,7 @@ PASSWORD_RESET_TOKEN_MAX_AGE = 1800  # 30 minutes
 FILE_VIEW_TOKEN_MAX_AGE = 60  # 1 minute
 OAUTH_STATE_MAX_AGE = 600  # 10 minutes
 GOOGLE_AUTH_VERIFY_MAX_AGE = 120  # 2 minutes
+SHARE_ACCESS_TOKEN_MAX_AGE = 8 * 3600  # 8 hours per viewer visit
 
 # Google OAuth endpoints
 GOOGLE_AUTH_URI = "https://accounts.google.com/o/oauth2/auth"

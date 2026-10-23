@@ -3,6 +3,9 @@ import {
   ChevronDown,
   PlusCircle,
   X,
+  Share2,
+  ClipboardCheck,
+  MessageCircleQuestion,
 } from "lucide-react"
 import { DataRoomIcon, ActivityIcon, SettingsIcon, SearchIcon } from "@/components/icons"
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -19,6 +22,9 @@ import { ColorPicker } from "./ColorPicker"
 const mainMenu = [
   { icon: DataRoomIcon, label: "Data Room", color: "text-[#3E90F0]" },
   { icon: ActivityIcon, label: "Activity", color: "text-[#D84C10]" },
+  { icon: Share2, label: "Sharing", color: "text-[#3FDD78]" },
+  { icon: ClipboardCheck, label: "Diligence", color: "text-[#F0B43E]" },
+  { icon: MessageCircleQuestion, label: "Q&A", color: "text-[#3E90F0]" },
   { icon: SettingsIcon, label: "Settings", color: "text-[#8E55EA]" },
 ]
 

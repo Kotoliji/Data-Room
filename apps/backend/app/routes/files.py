@@ -1,15 +1,16 @@
+import mimetypes
 import os
 import uuid
-from pathlib import Path
 
 from flask import Blueprint, Response, request, jsonify, current_app
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from werkzeug.utils import secure_filename
 
 from app import db
-from app.models import User, File, Folder
+from app.models import User, File
 from app.services.activity_service import log_activity
-from app.services.file_service import storage_dir
+from app.services.insights import queue_analysis
+from app.services.file_service import deduplicate_name, remove_file, is_valid_folder_key, send_stored_file, storage_dir
 from app.utils import require_auth
 from app.constants import MAX_FILE_SIZE, FILE_VIEW_TOKEN_MAX_AGE
 
@@ -36,6 +37,8 @@ def upload_files(user: User) -> tuple[Response, int]:
         return jsonify({"data": None, "error": f"Maximum {MAX_FILES_PER_REQUEST} files per upload"}), 400
 
     folder_id = request.form.get("folder_id", "all")
+    if not is_valid_folder_key(user, folder_id):
+        return jsonify({"data": None, "error": "Folder not found"}), 404
     storage = storage_dir(user.id)
     results = []
     skipped = []
@@ -65,8 +68,8 @@ def upload_files(user: User) -> tuple[Response, int]:
 
         record = File(
             name=original,
-            original_name=f.filename,
-            mime_type=f.content_type,
+            original_name=deduplicate_name(f.filename, user.id, folder_id),
+            mime_type=mimetypes.guess_type(original)[0] or "application/octet-stream",
             size=size,
             path=str(path),
             folder_id=folder_id,
@@ -74,11 +77,13 @@ def upload_files(user: User) -> tuple[Response, int]:
             status="uploaded",
         )
         db.session.add(record)
+        db.session.flush()  # so the next duplicate in this batch sees it
         results.append(record)
 
     for r in results:
         log_activity(user.id, "uploaded", r.original_name, folder_id=r.folder_id)
     db.session.commit()
+    queue_analysis([r.id for r in results])
 
     current_app.logger.info("Uploaded %d files for user %s", len(results), user.id)
     return jsonify({
@@ -150,32 +155,10 @@ def view_file(file_id: int) -> Response:
     if not record:
         return jsonify({"data": None, "error": "File not found"}), 404
 
-    file_path = Path(record.path).resolve()
-    allowed_dir = storage_dir(user.id).resolve()
-    if not file_path.is_relative_to(allowed_dir):
-        current_app.logger.warning("Path traversal attempt: %s (user %s)", record.path, user.id)
-        return jsonify({"data": None, "error": "Forbidden"}), 403
-
-    if not file_path.exists():
+    response = send_stored_file(record)
+    if response is None:
         return jsonify({"data": None, "error": "File not found on disk"}), 404
-
-    from flask import send_file
-
-    # Inline-viewable types open in browser, others download
-    inline_mimes = {
-        "application/pdf",
-        "text/plain", "text/csv", "text/html",
-        "image/jpeg", "image/png", "image/gif", "image/svg+xml", "image/webp",
-    }
-    mime = record.mime_type or "application/octet-stream"
-    as_attachment = mime not in inline_mimes
-
-    return send_file(
-        str(file_path),
-        mimetype=mime,
-        download_name=record.original_name,
-        as_attachment=as_attachment,
-    )
+    return response
 
 
 @files_bp.route("/<int:file_id>/move", methods=["PUT"])
@@ -186,17 +169,8 @@ def move_file(user: User, file_id: int) -> tuple[Response, int]:
     if not folder_id:
         return jsonify({"data": None, "error": "folder_id is required"}), 400
 
-    # Validate target folder exists and belongs to user
-    if folder_id not in ("all", "Trash"):
-        if folder_id.startswith("folder:"):
-            try:
-                fid = int(folder_id.split(":")[1])
-            except (IndexError, ValueError):
-                return jsonify({"data": None, "error": "Invalid folder_id"}), 400
-            if not Folder.query.filter_by(id=fid, user_id=user.id).first():
-                return jsonify({"data": None, "error": "Folder not found"}), 404
-        else:
-            return jsonify({"data": None, "error": "Invalid folder_id"}), 400
+    if not is_valid_folder_key(user, folder_id):
+        return jsonify({"data": None, "error": "Folder not found"}), 404
 
     record = File.query.filter_by(id=file_id, user_id=user.id).first()
     if not record:
@@ -227,6 +201,11 @@ def rename_file(user: User, file_id: int) -> tuple[Response, int]:
     if not record:
         return jsonify({"data": None, "error": "File not found"}), 404
 
+    if new_name == record.original_name:
+        return jsonify({"data": record.to_dict(), "error": None}), 200
+    if File.query.filter_by(user_id=user.id, folder_id=record.folder_id, original_name=new_name).first():
+        return jsonify({"data": None, "error": "A file with this name already exists in this folder"}), 409
+
     old_name = record.original_name
     record.original_name = new_name
     log_activity(user.id, "renamed", new_name, folder_id=record.folder_id, details=f"from {old_name}")
@@ -243,20 +222,9 @@ def delete_file(user: User, file_id: int) -> tuple[Response, int]:
     if not record:
         return jsonify({"data": None, "error": "File not found"}), 404
 
-    try:
-        path = Path(record.path).resolve()
-        allowed_dir = storage_dir(user.id).resolve()
-        if not path.is_relative_to(allowed_dir):
-            current_app.logger.warning("Path traversal attempt on delete: %s (user %s)", record.path, user.id)
-            return jsonify({"data": None, "error": "Forbidden"}), 403
-        if path.exists():
-            path.unlink()
-    except OSError:
-        current_app.logger.warning("Could not delete file on disk: %s", record.path)
-
     file_name = record.original_name
     file_folder = record.folder_id
-    db.session.delete(record)
+    remove_file(user, record)
     log_activity(user.id, "deleted", file_name, folder_id=file_folder)
     db.session.commit()
 

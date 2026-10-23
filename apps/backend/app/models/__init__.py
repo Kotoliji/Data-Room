@@ -1,8 +1,10 @@
+import json
 from datetime import datetime, timezone
 
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app import db
+from app.crypto import EncryptedText
 
 
 class User(db.Model):
@@ -14,8 +16,8 @@ class User(db.Model):
     password_hash: str = db.Column(db.String(256), nullable=False)
     location: str | None = db.Column(db.String(200), nullable=True)
     avatar_path: str | None = db.Column(db.String(500), nullable=True)
-    google_access_token: str | None = db.Column(db.Text, nullable=True)
-    google_refresh_token: str | None = db.Column(db.Text, nullable=True)
+    google_access_token: str | None = db.Column(EncryptedText, nullable=True)
+    google_refresh_token: str | None = db.Column(EncryptedText, nullable=True)
     google_token_expiry: datetime | None = db.Column(db.DateTime, nullable=True)
     google_connected: bool = db.Column(db.Boolean, default=False)
     created_at: datetime = db.Column(
@@ -63,9 +65,11 @@ class File(db.Model):
     )
 
     user = db.relationship("User", backref="files")
+    insight = db.relationship("DocumentInsight", uselist=False, cascade="all, delete-orphan")
 
     def to_dict(self) -> dict:
         return {
+            "insight": self.insight.to_dict() if self.insight else None,
             "id": self.id,
             "name": self.name,
             "original_name": self.original_name,
@@ -119,3 +123,179 @@ class ActivityLog(db.Model):
     )
 
     user = db.relationship("User", backref="activity_logs")
+
+
+class ShareLink(db.Model):
+    """External access link to the whole Data Room (folder_id=None) or a folder subtree."""
+
+    __tablename__ = "share_links"
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    token: str = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    user_id: int = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    folder_id: int | None = db.Column(db.Integer, db.ForeignKey("folders.id", ondelete="CASCADE"), nullable=True)
+    name: str = db.Column(db.String(120), nullable=False)
+    password_hash: str | None = db.Column(db.String(256), nullable=True)
+    expires_at: datetime | None = db.Column(db.DateTime, nullable=True)
+    allow_download: bool = db.Column(db.Boolean, default=False, nullable=False)
+    revoked: bool = db.Column(db.Boolean, default=False, nullable=False)
+    created_at: datetime = db.Column(
+        db.DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+
+    folder = db.relationship("Folder")
+    accesses = db.relationship("ShareAccess", backref="link", cascade="all, delete-orphan",
+                               lazy="dynamic", order_by="ShareAccess.created_at.desc()")
+    page_views = db.relationship("SharePageView", cascade="all, delete-orphan", lazy="dynamic")
+
+    def set_password(self, password: str | None) -> None:
+        self.password_hash = generate_password_hash(password) if password else None
+
+    def check_password(self, password: str) -> bool:
+        return self.password_hash is None or check_password_hash(self.password_hash, password)
+
+    def is_expired(self) -> bool:
+        return self.expires_at is not None and self.expires_at <= datetime.now(timezone.utc).replace(tzinfo=None)
+
+    def to_dict(self) -> dict:
+        last = self.accesses.first()
+        return {
+            "id": self.id,
+            "token": self.token,
+            "name": self.name,
+            "folder_id": self.folder_id,
+            "folder_name": self.folder.name if self.folder else None,
+            "has_password": self.password_hash is not None,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "allow_download": self.allow_download,
+            "revoked": self.revoked,
+            "expired": self.is_expired(),
+            "created_at": self.created_at.isoformat(),
+            "viewer_count": self.accesses.with_entities(ShareAccess.viewer_email).distinct().count(),
+            "event_count": self.accesses.count(),
+            "last_access_at": last.created_at.isoformat() if last else None,
+        }
+
+
+class ShareAccess(db.Model):
+    """Audit trail: who opened a share link and which documents they viewed or downloaded."""
+
+    __tablename__ = "share_accesses"
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    link_id: int = db.Column(db.Integer, db.ForeignKey("share_links.id", ondelete="CASCADE"), nullable=False, index=True)
+    viewer_email: str = db.Column(db.String(120), nullable=False)
+    action: str = db.Column(db.String(20), nullable=False)  # opened | viewed | downloaded
+    file_id: int | None = db.Column(db.Integer, nullable=True)  # no FK: the trail outlives deleted files
+    file_name: str | None = db.Column(db.String(255), nullable=True)
+    ip: str = db.Column(db.String(45), nullable=False)
+    created_at: datetime = db.Column(
+        db.DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "viewer_email": self.viewer_email,
+            "action": self.action,
+            "file_name": self.file_name,
+            "ip": self.ip,
+            "created_at": self.created_at.isoformat(),
+        }
+
+
+class SharePageView(db.Model):
+    """Seconds a viewer spent on each page of a shared PDF (one row per viewer/file/page)."""
+
+    __tablename__ = "share_page_views"
+    __table_args__ = (db.UniqueConstraint("link_id", "viewer_email", "file_id", "page"),)
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    link_id: int = db.Column(db.Integer, db.ForeignKey("share_links.id", ondelete="CASCADE"), nullable=False, index=True)
+    viewer_email: str = db.Column(db.String(120), nullable=False)
+    file_id: int = db.Column(db.Integer, nullable=False)
+    file_name: str = db.Column(db.String(255), nullable=False)
+    page: int = db.Column(db.Integer, nullable=False)
+    seconds: int = db.Column(db.Integer, default=0, nullable=False)
+    updated_at: datetime = db.Column(
+        db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
+
+
+class DocumentInsight(db.Model):
+    """Extracted text plus AI (or heuristic) classification of one document."""
+
+    __tablename__ = "document_insights"
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    file_id: int = db.Column(db.Integer, db.ForeignKey("files.id", ondelete="CASCADE"), unique=True, nullable=False)
+    status: str = db.Column(db.String(20), default="pending", nullable=False)  # pending | ready | failed
+    category: str | None = db.Column(db.String(40), nullable=True)
+    summary: str | None = db.Column(db.Text, nullable=True)
+    sensitive: str = db.Column(db.Text, default="[]", nullable=False)  # JSON list of {kind, detail}
+    source: str | None = db.Column(db.String(20), nullable=True)  # claude | heuristic
+    text: str | None = db.Column(db.Text, nullable=True)
+    updated_at: datetime = db.Column(
+        db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "status": self.status,
+            "category": self.category,
+            "summary": self.summary,
+            "sensitive": json.loads(self.sensitive or "[]"),
+            "source": self.source,
+        }
+
+
+class DiligenceReview(db.Model):
+    """Latest checklist gap analysis for a user's Data Room."""
+
+    __tablename__ = "diligence_reviews"
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    user_id: int = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    result: str = db.Column(db.Text, nullable=False)  # JSON list of checklist item results
+    source: str = db.Column(db.String(20), nullable=False)
+    created_at: datetime = db.Column(
+        db.DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class Question(db.Model):
+    """A question an external viewer asked through a share link, and the owner's answer."""
+
+    __tablename__ = "questions"
+
+    id: int = db.Column(db.Integer, primary_key=True)
+    link_id: int = db.Column(db.Integer, db.ForeignKey("share_links.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: int = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)  # room owner
+    viewer_email: str = db.Column(db.String(120), nullable=False)
+    file_id: int | None = db.Column(db.Integer, nullable=True)  # no FK: questions outlive deleted files
+    file_name: str | None = db.Column(db.String(255), nullable=True)
+    page: int | None = db.Column(db.Integer, nullable=True)
+    body: str = db.Column(db.Text, nullable=False)
+    answer: str | None = db.Column(db.Text, nullable=True)
+    answered_at: datetime | None = db.Column(db.DateTime, nullable=True)
+    created_at: datetime = db.Column(
+        db.DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+
+    link = db.relationship("ShareLink", backref=db.backref("questions", cascade="all, delete-orphan", lazy="dynamic"))
+
+    def to_dict(self, for_owner: bool = False) -> dict:
+        data = {
+            "id": self.id,
+            "file_id": self.file_id,
+            "file_name": self.file_name,
+            "page": self.page,
+            "body": self.body,
+            "answer": self.answer,
+            "status": "answered" if self.answer else "open",
+            "answered_at": self.answered_at.isoformat() if self.answered_at else None,
+            "created_at": self.created_at.isoformat(),
+        }
+        if for_owner:
+            data.update(viewer_email=self.viewer_email, link_id=self.link_id, link_name=self.link.name)
+        return data

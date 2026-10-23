@@ -1,0 +1,21 @@
+# Render Blueprint — free web service built from the root Dockerfile.
+# The free tier has no persistent disk, so DEMO_SEED recreates the demo room on every start.
+services:
+  - type: web
+    name: data-room
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEMO_SEED
+        value: "1"
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
