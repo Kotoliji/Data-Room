@@ -4,12 +4,13 @@ import { Mail, Lock, X } from "lucide-react"
 import { AuthLogo } from "./AuthLogo"
 import { AuthTabToggle } from "./AuthTabToggle"
 import { SocialButtons } from "./SocialButtons"
-import { OrDivider } from "./OrDivider"
 import { AuthInput } from "./AuthInput"
 import { login, exchangeGoogleCode } from "@/lib/api"
+import { useAuthConfig } from "@/lib/useAuthConfig"
 
 const GOOGLE_ERROR_MESSAGES: Record<string, string> = {
   account_exists: "An account with this email already exists. Please sign in.",
+  not_configured: "Google sign-in is not configured on this server.",
   no_account: "No account found with this Google email. Please register first.",
   invalid_state: "Google login session expired. Please try again.",
   token_exchange_failed: "Failed to connect with Google. Please try again.",
@@ -50,15 +51,9 @@ export function SignInForm() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError("")
+  const config = useAuthConfig()
 
-    if (!email || !password) {
-      setError("Email and password are required")
-      return
-    }
-
+  async function signIn(email: string, password: string) {
     setLoading(true)
     const res = await login({ email, password })
     setLoading(false)
@@ -76,6 +71,17 @@ export function SignInForm() {
     }
   }
 
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError("")
+
+    if (!email || !password) {
+      setError("Email and password are required")
+      return
+    }
+    await signIn(email, password)
+  }
+
   return (
     <div className="relative flex flex-1 flex-col items-center justify-center self-stretch bg-[#FEFEFE] px-[32px] lg:rounded-[20px] lg:px-[200px] 2xl:px-[376px]">
       <button
@@ -90,8 +96,28 @@ export function SignInForm() {
       <div className="flex w-full max-w-[504px] flex-col items-center gap-[32px]">
         <AuthLogo />
         <AuthTabToggle activeTab="signin" />
+        {config?.demo && (
+          <div className="flex w-full flex-col items-center gap-[12px] rounded-[12px] border-2 border-dashed border-[#3E90F0]/40 bg-[#3E90F0]/5 px-[20px] py-[16px] text-center">
+            <p className="font-[Karla,sans-serif] text-[14px] text-[#6C7275]">
+              Exploring the portfolio demo? Sign in to a pre-filled data room — it resets on every restart.
+            </p>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => {
+                const demo = config.demo
+                if (!demo) return
+                setEmail(demo.email)
+                setPassword(demo.password)
+                signIn(demo.email, demo.password)
+              }}
+              className="rounded-[12px] bg-[#3E90F0] px-[24px] py-[10px] font-[Inter,sans-serif] text-[15px] font-semibold text-white transition-colors hover:bg-[#2f7fdc] disabled:opacity-50"
+            >
+              Try the demo account
+            </button>
+          </div>
+        )}
         <SocialButtons mode="login" />
-        <OrDivider />
 
         <form
           className="flex w-full flex-col gap-[24px]"

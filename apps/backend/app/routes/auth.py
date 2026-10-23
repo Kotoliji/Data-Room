@@ -42,6 +42,15 @@ def _user_dict(user: User) -> dict:
 
 # --------------- Auth endpoints ---------------
 
+@auth_bp.route("/config", methods=["GET"])
+def auth_config() -> tuple[Response, int]:
+    """What the sign-in UI should offer on this deployment."""
+    from app.demo import DEMO_EMAIL, DEMO_PASSWORD
+    google = bool(current_app.config["GOOGLE_CLIENT_ID"] and current_app.config["GOOGLE_CLIENT_SECRET"])
+    demo = {"email": DEMO_EMAIL, "password": DEMO_PASSWORD} if current_app.config["DEMO_SEED"] else None
+    return jsonify({"data": {"google_enabled": google, "demo": demo}, "error": None}), 200
+
+
 @auth_bp.route("/register", methods=["POST"])
 @limiter.limit("10 per hour")
 def register() -> tuple[Response, int]:

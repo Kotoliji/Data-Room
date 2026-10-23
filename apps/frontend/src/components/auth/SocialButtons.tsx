@@ -1,4 +1,6 @@
 import { getGoogleLoginUrl } from "@/lib/api"
+import { useAuthConfig } from "@/lib/useAuthConfig"
+import { OrDivider } from "./OrDivider"
 
 function GoogleIcon() {
   return (
@@ -19,12 +21,18 @@ interface SocialButtonsProps {
 }
 
 export function SocialButtons({ mode = "login" }: SocialButtonsProps) {
+  const config = useAuthConfig()
+  if (!config?.google_enabled) return null  // no broken Google redirect on deployments without OAuth keys
+
   return (
+    <>
     <div className="flex w-full flex-col gap-[12px]">
       <button type="button" className={btnClass} onClick={() => { window.location.href = getGoogleLoginUrl(mode) }}>
         <GoogleIcon />
         <span className={labelClass}>Continue with Google</span>
       </button>
     </div>
+    <OrDivider />
+    </>
   )
 }

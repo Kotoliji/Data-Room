@@ -358,3 +358,12 @@ export function answerQuestion(id: number, answer: string): Promise<ApiResponse<
 export function draftAnswer(id: number): Promise<ApiResponse<DraftAnswer>> {
   return request<DraftAnswer>(`/questions/${id}/draft`, { method: "POST" })
 }
+
+export interface AuthConfig {
+  google_enabled: boolean
+  demo: { email: string; password: string } | null
+}
+
+export function getAuthConfig(): Promise<ApiResponse<AuthConfig>> {
+  return request<AuthConfig>("/auth/config", { method: "GET" })
+}

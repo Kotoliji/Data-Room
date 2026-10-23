@@ -4,7 +4,6 @@ import { Mail, Lock, User, X } from "lucide-react"
 import { AuthLogo } from "./AuthLogo"
 import { AuthTabToggle } from "./AuthTabToggle"
 import { SocialButtons } from "./SocialButtons"
-import { OrDivider } from "./OrDivider"
 import { AuthInput } from "./AuthInput"
 import { register, API_BASE } from "@/lib/api"
 
@@ -86,7 +85,6 @@ export function CreateAccountForm() {
         <AuthLogo />
         <AuthTabToggle activeTab="register" />
         <SocialButtons mode="register" />
-        <OrDivider />
 
         <form
           className="flex w-full flex-col gap-[24px]"

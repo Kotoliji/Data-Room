@@ -55,3 +55,13 @@ def test_spa_is_served_with_client_side_routes(tmp_path, monkeypatch):
     assert c.get("/assets/app.js").data == b"console.log(1)"
     assert c.get("/api/v1/nope").status_code == 404
     assert c.get("/api/v1/health").get_json()["data"]["status"] == "ok"
+
+
+def test_auth_config_and_unconfigured_google(tmp_path, monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "")
+    c = demo_app(tmp_path, monkeypatch).test_client()
+    config = c.get("/api/v1/auth/config").get_json()["data"]
+    assert config == {"google_enabled": False, "demo": {"email": DEMO_EMAIL, "password": DEMO_PASSWORD}}
+    r = c.get("/api/v1/auth/google/login?mode=login")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/login?google_error=not_configured")

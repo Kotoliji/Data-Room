@@ -2,6 +2,7 @@ import { X, Upload, HardDrive, ChevronLeft, ChevronRight, Search, Check, Loader2
 import { useState, useRef, useEffect, useCallback } from "react"
 import type { DriveFile } from "@/lib/types"
 import { getDriveFiles, getGoogleConnectUrl, getGoogleDriveStatus } from "@/lib/api"
+import { useAuthConfig } from "@/lib/useAuthConfig"
 import { formatSize } from "@/lib/utils"
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024
@@ -22,6 +23,7 @@ type FolderEntry = { id: string; name: string }
 export function ImportFilesModal({ isOpen, onClose, onApply, onImportDrive, folderId: rawFolderId }: ImportFilesModalProps) {
   // Normalize "All documents" to "all" for the backend
   const folderId = rawFolderId === "All documents" ? "all" : rawFolderId
+  const authConfig = useAuthConfig()
   const [files, setFiles] = useState<File[]>([])
   const [error, setError] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -248,11 +250,12 @@ export function ImportFilesModal({ isOpen, onClose, onApply, onImportDrive, fold
 
                 <button
                   onClick={handleDriveClick}
-                  className="flex items-center gap-[12px] rounded-[12px] border border-[#e8ecef] p-[20px] transition-colors hover:bg-[#f3f5f7]"
+                  disabled={!authConfig?.google_enabled}
+                  className="flex items-center gap-[12px] rounded-[12px] border border-[#e8ecef] p-[20px] transition-colors hover:bg-[#f3f5f7] disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
                   <HardDrive size={20} className="shrink-0 text-[rgba(108,114,117,0.5)]" />
                   <span className="text-[14px] leading-[20px] text-[rgba(108,114,117,0.5)]">
-                    Upload from Google Drive
+                    Upload from Google Drive{authConfig && !authConfig.google_enabled ? " — not configured on this demo server" : ""}
                   </span>
                 </button>
               </div>

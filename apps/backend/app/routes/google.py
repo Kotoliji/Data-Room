@@ -60,9 +60,15 @@ def _redirect_uri() -> str:
     return f"{backend_url}/api/v1/auth/google/callback"
 
 
+def _configured() -> bool:
+    return bool(current_app.config["GOOGLE_CLIENT_ID"] and current_app.config["GOOGLE_CLIENT_SECRET"])
+
+
 @google_bp.route("/google/connect", methods=["GET"])
 @require_auth
 def google_connect(user: User) -> tuple[Response, int]:
+    if not _configured():
+        return jsonify({"data": None, "error": "Google Drive is not configured on this server"}), 503
     flow = _build_flow(_redirect_uri(), SCOPES)
     auth_url, _ = flow.authorization_url(
         access_type="offline",
@@ -146,6 +152,8 @@ def _login_redirect_uri() -> str:
 def google_login() -> Response:
     """Start Google OAuth for login/register."""
     mode = request.args.get("mode", "login")  # "login" or "register"
+    if not _configured():
+        return redirect(f"{current_app.config['FRONTEND_URL']}/login?google_error=not_configured")
 
     flow = _build_flow(_login_redirect_uri(), LOGIN_SCOPES)
     auth_url, _ = flow.authorization_url(
