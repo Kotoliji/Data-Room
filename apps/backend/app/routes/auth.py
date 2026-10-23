@@ -10,14 +10,17 @@ from werkzeug.utils import secure_filename
 from app import db, limiter
 from app.models import User, Session, File, Folder, ActivityLog, ShareLink, DocumentInsight, DiligenceReview
 from app.services.email_service import send_reset_email
-from app.utils import require_auth, parse_device, generate_session_token
+from app.utils import require_auth, parse_device, generate_session_token, is_demo_account, demo_locked
 from app.constants import PASSWORD_RESET_TOKEN_MAX_AGE
 
 auth_bp = Blueprint("auth", __name__)
 
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "gif"}
 MAX_AVATAR_SIZE = 5 * 1024 * 1024  # 5MB
-STORAGE_DIR = Path(__file__).resolve().parent.parent.parent / "storage" / "avatars"
+
+
+def _avatar_dir() -> Path:
+    return Path(current_app.config["STORAGE_DIR"]) / "avatars"
 
 
 def _avatar_url(user: User) -> str | None:
@@ -107,6 +110,8 @@ def me(user: User) -> tuple[Response, int]:
 @auth_bp.route("/profile", methods=["PUT"])
 @require_auth
 def update_profile(user: User) -> tuple[Response, int]:
+    if is_demo_account(user):
+        return demo_locked()
     data = request.get_json(silent=True) or {}
 
     if "name" in data:
@@ -139,6 +144,8 @@ def update_profile(user: User) -> tuple[Response, int]:
 @auth_bp.route("/avatar", methods=["POST"])
 @require_auth
 def upload_avatar(user: User) -> tuple[Response, int]:
+    if is_demo_account(user):
+        return demo_locked()
     if "avatar" not in request.files:
         return jsonify({"data": None, "error": "No avatar file provided"}), 400
 
@@ -166,9 +173,9 @@ def upload_avatar(user: User) -> tuple[Response, int]:
                 current_app.logger.warning("Failed to delete old avatar: %s", old_path)
 
     # Save new avatar
-    STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+    _avatar_dir().mkdir(parents=True, exist_ok=True)
     filename = f"{user.id}_{int(time.time())}.{ext}"
-    filepath = STORAGE_DIR / secure_filename(filename)
+    filepath = _avatar_dir() / secure_filename(filename)
     file.save(str(filepath))
 
     user.avatar_path = str(filepath)
@@ -188,7 +195,7 @@ def get_avatar(user_id: int) -> tuple[Response, int] | Response:
         return jsonify({"data": None, "error": "Avatar not found"}), 404
 
     avatar_path = Path(user.avatar_path)
-    if not avatar_path.resolve().is_relative_to(STORAGE_DIR.resolve()):
+    if not avatar_path.resolve().is_relative_to(_avatar_dir().resolve()):
         return jsonify({"data": None, "error": "Forbidden"}), 403
 
     if not avatar_path.exists():
@@ -288,6 +295,8 @@ def reset_password() -> tuple[Response, int]:
 @limiter.limit("10 per hour")
 @require_auth
 def change_password(user: User) -> tuple[Response, int]:
+    if is_demo_account(user):
+        return demo_locked()
     data = request.get_json(silent=True) or {}
     old_password = data.get("old_password", "")
     new_password = data.get("new_password", "")
@@ -361,6 +370,8 @@ def revoke_all_sessions(user: User) -> tuple[Response, int]:
 @auth_bp.route("/account", methods=["DELETE"])
 @require_auth
 def delete_account(user: User) -> tuple[Response, int]:
+    if is_demo_account(user):
+        return demo_locked()
     data = request.get_json(silent=True) or {}
     password = data.get("password", "")
 

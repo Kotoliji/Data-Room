@@ -6,18 +6,25 @@ A virtual Data Room MVP for securely storing and managing due diligence document
 
 ## How to Test
 
-**Live demo:** [https://virtuous-presence-production-6468.up.railway.app/](https://virtuous-presence-production-6468.up.railway.app/)
+**Live demo:** _URL added after the Render deploy_ — the free instance sleeps when idle, so the first request takes ~30 s.
 
-The Google OAuth app is in testing mode, so only approved test users can connect Drive. Credentials for a pre-filled demo Google account are shared privately on request — they are intentionally not published here.
+The demo room is recreated on every start, so feel free to click anything:
+
+|                     |                                                           |
+| ------------------- | --------------------------------------------------------- |
+| **Owner login**     | `demo@acmecorp.dev` / `DataRoomDemo2026`                  |
+| **Investor view**   | `<live demo URL>/s/acme-investor-demo` — enter any email  |
+
+It contains four folders of sample M&A documents (already classified, one flagged as sensitive), an investor link with viewing history and page analytics, and an open buyer question waiting for an answer. Account settings are locked for the shared demo login.
 
 ### Step-by-step
 
-1. Open the live demo and click **"Register"** to create a Data Room account (or use **"Sign in with Google"**)
-2. Inside the Data Room, click **"Import"** → **"Upload from Google Drive"**
-3. Connect Google Drive with the demo Google account (or your own account, if it is added as a test user)
-4. Browse folders, select files with checkboxes, click **"Import"**
-5. Files appear in your Data Room — click the eye icon to **view in browser**
-6. Try **renaming** (pencil icon), **moving** (drag & drop), and **deleting** (trash icon)
+1. Sign in with the demo account — browse folders, open a PDF in the built-in viewer
+2. **Sharing** tab → expand "Project Falcon" → Analytics: engaged viewers, time per page
+3. **Q&A** tab → open question → **Draft with AI** → send the answer
+4. **Diligence** tab → checklist coverage and the sensitive-documents list
+5. Open the investor link in a private window → view a PDF (note the watermark with your email) → **Ask about this page**
+6. Google Drive import needs the OAuth app's test users — see [Setup from Scratch](#setup-from-scratch)
 
 ### Features to try
 
@@ -80,7 +87,7 @@ Open `http://localhost:5173` in your browser.
 ```bash
 cd apps/backend
 pip install -r requirements-dev.txt
-pytest -q          # 51 tests: auth, files, folders/trash, sharing scope, Drive import (mocked), security, migrations
+pytest -q          # 53 tests: auth, files, folders/trash, sharing scope, Drive import (mocked), security, migrations
 ```
 
 GitHub Actions runs backend tests plus frontend lint and build on every push and pull request.
@@ -95,6 +102,21 @@ flask --app run.py db migrate -m "describe change"   # then review migrations/ve
 ```
 
 ---
+
+## Deploy
+
+One Docker image serves the React build and the Flask API from the same origin (no CORS, one URL).
+
+**Render (free):** New → Blueprint → select this repo. `render.yaml` builds the root `Dockerfile`, generates `SECRET_KEY` and enables `DEMO_SEED`. Optionally add `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` and `ANTHROPIC_API_KEY`. The free tier has no persistent disk, which is why the demo seeds itself on every start.
+
+**Anywhere else:**
+
+```bash
+docker build -t data-room .
+docker run -p 8080:8080 -e SECRET_KEY=$(openssl rand -hex 32) -e DEMO_SEED=1 -v dataroom:/data data-room
+```
+
+Data lives in `/data` (SQLite + files) — mount a volume to keep it, or point `DATABASE_URL` at Postgres. The public URL is picked up from `RENDER_EXTERNAL_URL` / `RAILWAY_PUBLIC_DOMAIN`, or set `PUBLIC_URL`; Google OAuth redirect URIs must use it (`<url>/api/v1/auth/google/callback` and `/login/callback`).
 
 ## Setup from Scratch
 

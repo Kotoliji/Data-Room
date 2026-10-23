@@ -1,0 +1,17 @@
+.git
+.github
+.claude
+.docx_extract
+*.docx
+*.txt
+!apps/backend/requirements.txt
+**/node_modules
+**/dist
+**/venv
+**/__pycache__
+**/*.pyc
+apps/backend/storage
+apps/backend/instance
+apps/backend/tests
+**/.env
+**/*.db

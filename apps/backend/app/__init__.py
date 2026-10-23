@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -38,12 +38,17 @@ def create_app() -> Flask:
     app.config["STORAGE_DIR"] = os.environ.get("STORAGE_DIR", str(Path(app.root_path).parent / "storage"))
     app.config["SMTP_USER"] = os.environ.get("SMTP_USER", "")
     app.config["SMTP_PASSWORD"] = os.environ.get("SMTP_PASSWORD", "")
-    app.config["FRONTEND_URL"] = os.environ.get("FRONTEND_URL", "http://localhost:5173")
-    app.config["BACKEND_URL"] = os.environ.get("BACKEND_URL", "http://localhost:5000")
+    # One public URL serves both the SPA and the API in production; hosts announce it themselves
+    public_url = (os.environ.get("PUBLIC_URL")
+                  or (f"https://{os.environ['RAILWAY_PUBLIC_DOMAIN']}" if os.environ.get("RAILWAY_PUBLIC_DOMAIN") else "")
+                  or os.environ.get("RENDER_EXTERNAL_URL", ""))
+    app.config["FRONTEND_URL"] = os.environ.get("FRONTEND_URL") or public_url or "http://localhost:5173"
+    app.config["BACKEND_URL"] = os.environ.get("BACKEND_URL") or public_url or "http://localhost:5000"
     app.config["GOOGLE_CLIENT_ID"] = os.environ.get("GOOGLE_CLIENT_ID", "")
     app.config["GOOGLE_CLIENT_SECRET"] = os.environ.get("GOOGLE_CLIENT_SECRET", "")
     app.config["ANTHROPIC_API_KEY"] = os.environ.get("ANTHROPIC_API_KEY", "")
     app.config["INSIGHTS_ASYNC"] = os.environ.get("INSIGHTS_ASYNC", "1") != "0"
+    app.config["DEMO_SEED"] = os.environ.get("DEMO_SEED") == "1"
 
     CORS(app, origins=[app.config["FRONTEND_URL"]])
     db.init_app(app)
@@ -53,6 +58,13 @@ def create_app() -> Flask:
     from app.routes import register_blueprints
     register_blueprints(app)
 
+    @app.route("/api/v1/health")
+    def health():  # type: ignore[no-untyped-def]
+        db.session.execute(db.text("SELECT 1"))
+        return jsonify({"data": {"status": "ok"}, "error": None}), 200
+
+    _serve_frontend(app)
+
     @app.errorhandler(429)
     def too_many_requests(_e):  # type: ignore[no-untyped-def]
         return jsonify({"data": None, "error": "Too many attempts — please try again later"}), 429
@@ -60,9 +72,31 @@ def create_app() -> Flask:
     with app.app_context():
         from app import models  # noqa: F401
         _upgrade_db(app)
+        if app.config["DEMO_SEED"]:
+            from app.demo import seed_demo
+            seed_demo(app)
 
     app.logger.info("App created successfully")
     return app
+
+
+def _serve_frontend(app: Flask) -> None:
+    """Serve the built SPA from the same origin as the API when a build is present."""
+    dist = Path(os.environ.get("FRONTEND_DIST") or Path(app.root_path).parents[1] / "frontend" / "dist").resolve()
+    if not (dist / "index.html").is_file():
+        return
+
+    @app.route("/", defaults={"path": ""})
+    @app.route("/<path:path>")
+    def spa(path: str):  # type: ignore[no-untyped-def]
+        if path.startswith("api/"):
+            return jsonify({"data": None, "error": "Not found"}), 404
+        target = (dist / path).resolve()
+        if path and target.is_file() and target.is_relative_to(dist):
+            return send_from_directory(dist, path)
+        return send_from_directory(dist, "index.html")  # client-side routes: /login, /s/<token>, ...
+
+    app.logger.info("Serving frontend from %s", dist)
 
 
 def _upgrade_db(app: Flask) -> None:
