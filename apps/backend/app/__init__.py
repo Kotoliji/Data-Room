@@ -22,9 +22,9 @@ BASELINE_REVISION = "0001_baseline"
 def create_app() -> Flask:
     app = Flask(__name__, instance_relative_config=True)
 
-    # Trust exactly as many reverse proxies as the host puts in front of us for client IP and scheme
-    hops = int(os.environ.get("PROXY_HOPS", "1"))
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=hops, x_proto=hops)
+    # Client IP: trust as many X-Forwarded-For entries as the host's proxy chain adds
+    # (Render: Cloudflare + its load balancer = 3). Hosts send a single X-Forwarded-Proto value.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=int(os.environ.get("PROXY_HOPS", "1")), x_proto=1)
 
     secret = os.environ.get("SECRET_KEY", "")
     if len(secret) < 16:
@@ -63,14 +63,6 @@ def create_app() -> Flask:
     def health():  # type: ignore[no-untyped-def]
         db.session.execute(db.text("SELECT 1"))
         return jsonify({"data": {"status": "ok"}, "error": None}), 200
-
-    @app.route("/api/v1/debug/forwarded")
-    def debug_forwarded():  # type: ignore[no-untyped-def]
-        # TEMPORARY: shows the caller their own forwarding chain to calibrate PROXY_HOPS
-        from flask import request
-        return jsonify({"peer_addr": request.environ.get("werkzeug.proxy_fix.orig", {}).get("REMOTE_ADDR"),
-                        "resolved_remote_addr": request.remote_addr,
-                        "headers": {k: v for k, v in request.headers.items() if "ip" in k.lower() or "forward" in k.lower()}})
 
     _serve_frontend(app)
 

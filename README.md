@@ -6,20 +6,20 @@ A virtual Data Room MVP for securely storing and managing due diligence document
 
 ## How to Test
 
-**Live demo:** _URL added after the Render deploy_ — the free instance sleeps when idle, so the first request takes ~30 s.
+**Live demo:** [data-room-ork2.onrender.com](https://data-room-ork2.onrender.com) — free instance, sleeps when idle, so the first request can take ~30-60 s.
 
 The demo room is recreated on every start, so feel free to click anything:
 
 |                     |                                                           |
 | ------------------- | --------------------------------------------------------- |
 | **Owner login**     | `demo@acmecorp.dev` / `DataRoomDemo2026`                  |
-| **Investor view**   | `<live demo URL>/s/acme-investor-demo` — enter any email  |
+| **Investor view**   | [data-room-ork2.onrender.com/s/acme-investor-demo](https://data-room-ork2.onrender.com/s/acme-investor-demo) — enter any email |
 
 It contains four folders of sample M&A documents (already classified, one flagged as sensitive), an investor link with viewing history and page analytics, and an open buyer question waiting for an answer. Account settings are locked for the shared demo login.
 
 ### Step-by-step
 
-1. Sign in with the demo account — browse folders, open a PDF in the built-in viewer
+1. Click **Try the demo account** on the sign-in page (or use the login above) — browse folders, open a PDF in the built-in viewer
 2. **Sharing** tab → expand "Project Falcon" → Analytics: engaged viewers, time per page
 3. **Q&A** tab → open question → **Draft with AI** → send the answer
 4. **Diligence** tab → checklist coverage and the sensitive-documents list

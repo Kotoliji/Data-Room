@@ -66,3 +66,23 @@ def test_client_ip_from_single_proxy_hop(app, client):
                 headers={"X-Forwarded-For": "203.0.113.7"})
     with app.app_context():
         assert db.session.get(Session, 1).ip == "203.0.113.7"
+
+
+def test_client_ip_behind_render_proxy_chain(monkeypatch, tmp_path):
+    monkeypatch.setenv("SECRET_KEY", "test-secret-key-0123456789")
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'p.db'}")
+    monkeypatch.setenv("PROXY_HOPS", "3")
+    monkeypatch.setenv("STORAGE_DIR", str(tmp_path / "storage"))
+    app = create_app()
+    c = app.test_client()
+    # A spoofed entry prepended by the client is ignored; scheme still comes from the single proto header
+    c.post("/api/v1/auth/register", json={"name": "A", "email": "a@acme.io", "password": "password123"},
+           headers={"X-Forwarded-For": "6.6.6.6, 188.80.213.223, 172.71.147.59, 10.193.150.1", "X-Forwarded-Proto": "https"})
+    with app.app_context():
+        assert db.session.get(Session, 1).ip == "188.80.213.223"
+        db.engine.dispose()
+    proxied = {"X-Forwarded-For": "1.1.1.1, 2.2.2.2, 3.3.3.3", "X-Forwarded-Proto": "https"}
+    token = c.post("/api/v1/auth/login", json={"email": "a@acme.io", "password": "password123"}, headers=proxied).get_json()["data"]["token"]
+    auth = {"Authorization": f"Bearer {token}", **proxied}
+    fid = upload(c, auth, "a.txt", b"a", "text/plain").get_json()["data"]["files"][0]["id"]
+    assert c.get(f"/api/v1/files/{fid}/token", headers=auth).get_json()["data"]["url"].startswith("https://")

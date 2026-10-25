@@ -1,4 +1,4 @@
-# Render Blueprint — free web service built from the root Dockerfile.
+# Render Blueprint вЂ” free web service built from the root Dockerfile.
 # The free tier has no persistent disk, so DEMO_SEED recreates the demo room on every start.
 services:
   - type: web
@@ -13,6 +13,9 @@ services:
         generateValue: true
       - key: DEMO_SEED
         value: "1"
+      # Cloudflare -> Render load balancer -> app: the client is the 3rd X-Forwarded-For entry from the right
+      - key: PROXY_HOPS
+        value: "3"
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
