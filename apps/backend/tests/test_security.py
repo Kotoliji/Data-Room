@@ -71,7 +71,7 @@ def test_client_ip_from_single_proxy_hop(app, client):
 def test_client_ip_behind_render_proxy_chain(monkeypatch, tmp_path):
     monkeypatch.setenv("SECRET_KEY", "test-secret-key-0123456789")
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'p.db'}")
-    monkeypatch.setenv("PROXY_HOPS", "3")
+    monkeypatch.setenv("RENDER", "true")  # host default, no PROXY_HOPS needed
     monkeypatch.setenv("STORAGE_DIR", str(tmp_path / "storage"))
     app = create_app()
     c = app.test_client()

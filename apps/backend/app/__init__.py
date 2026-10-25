@@ -24,7 +24,8 @@ def create_app() -> Flask:
 
     # Client IP: trust as many X-Forwarded-For entries as the host's proxy chain adds
     # (Render: Cloudflare + its load balancer = 3). Hosts send a single X-Forwarded-Proto value.
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=int(os.environ.get("PROXY_HOPS", "1")), x_proto=1)
+    default_hops = "3" if os.environ.get("RENDER") else "1"  # Render sets RENDER=true on every service
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=int(os.environ.get("PROXY_HOPS", default_hops)), x_proto=1)
 
     secret = os.environ.get("SECRET_KEY", "")
     if len(secret) < 16:
