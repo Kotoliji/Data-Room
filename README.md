@@ -4,6 +4,15 @@
 
 A virtual Data Room MVP for securely storing and managing due diligence documents. Users connect their Google Drive via OAuth, browse and import files, then view and manage them in an organized repository.
 
+| | |
+| --- | --- |
+| ![Data Room](docs/screenshots/02-data-room.png) | ![Viewer analytics](docs/screenshots/03-sharing-analytics.png) |
+| **Data Room** — folders, AI category badges, content search | **Viewer analytics** — who read what, time per page, 14-day activity |
+| ![Due diligence](docs/screenshots/04-diligence.png) | ![Investor view](docs/screenshots/06-investor-viewer.png) |
+| **Due diligence** — checklist coverage, sensitive documents | **Investor view** — in-app PDF viewer, email watermark on every page |
+| ![Q&A](docs/screenshots/05-qa-draft.png) | ![Sign in](docs/screenshots/01-sign-in.png) |
+| **Buyer Q&A** — answer drafts with verified citations | **One-click demo** sign-in |
+
 ---
 
 ## How to Test
