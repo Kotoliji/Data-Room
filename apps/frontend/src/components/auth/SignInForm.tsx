@@ -7,6 +7,7 @@ import { SocialButtons } from "./SocialButtons"
 import { AuthInput } from "./AuthInput"
 import { login, exchangeGoogleCode } from "@/lib/api"
 import { useAuthConfig } from "@/lib/useAuthConfig"
+import { startSession } from "@/lib/session"
 
 const GOOGLE_ERROR_MESSAGES: Record<string, string> = {
   account_exists: "An account with this email already exists. Please sign in.",
@@ -36,8 +37,7 @@ export function SignInForm() {
       exchangeGoogleCode(googleCode).then((res) => {
         if (res.data && typeof res.data.token === "string" && typeof res.data.id === "number") {
           const { token, ...user } = res.data
-          localStorage.setItem("auth_token", token)
-          localStorage.setItem("user", JSON.stringify(user))
+          startSession(token, user)
           // Full page reload to reinitialize app state after login
           window.location.href = "/"
         } else {
@@ -65,8 +65,7 @@ export function SignInForm() {
 
     if (res.data) {
       const { token, ...user } = res.data
-      localStorage.setItem("auth_token", token)
-      localStorage.setItem("user", JSON.stringify(user))
+      startSession(token, user)
       navigate("/")
     }
   }

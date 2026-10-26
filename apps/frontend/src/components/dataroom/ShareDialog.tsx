@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Check, Copy, Link2, ShieldAlert, X } from "lucide-react"
-import type { ShareLink, SharePreview } from "@/lib/types"
-import { createShare, getSharePreview, shareUrl } from "@/lib/api"
+import type { ShareLink } from "@/lib/types"
+import { createShare, shareUrl } from "@/lib/api"
+import { keys, useSharePreview } from "@/lib/queries"
 import { SENSITIVE_LABELS } from "@/lib/labels"
 import { parseServerDate } from "@/lib/utils"
 
@@ -29,11 +31,8 @@ export function ShareDialog({ folderId, folderName, onClose }: ShareDialogProps)
   const [error, setError] = useState<string | null>(null)
   const [link, setLink] = useState<ShareLink | null>(null)
   const [copied, setCopied] = useState(false)
-  const [preview, setPreview] = useState<SharePreview | null>(null)
-
-  useEffect(() => {
-    getSharePreview(folderId).then((res) => setPreview(res.data))
-  }, [folderId])
+  const queryClient = useQueryClient()
+  const { data: preview } = useSharePreview(folderId)
 
   const handleCreate = async () => {
     setSaving(true)
@@ -51,6 +50,7 @@ export function ShareDialog({ folderId, folderName, onClose }: ShareDialogProps)
       return
     }
     setLink(res.data)
+    queryClient.invalidateQueries({ queryKey: keys.shares })
   }
 
   const handleCopy = async () => {

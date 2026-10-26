@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Loader2 } from "lucide-react"
 import type { ShareAnalytics } from "@/lib/types"
-import { getShareAnalytics } from "@/lib/api"
+import { useShareAnalytics } from "@/lib/queries"
 import { formatDuration, timeAgo } from "@/lib/utils"
 
 // One hue for every mark: sequential intensity is mixed from the theme's surface toward it
@@ -104,11 +104,7 @@ function PageHeatmap({ doc }: { doc: ShareAnalytics["documents"][number] }) {
 }
 
 export function ShareAnalyticsPanel({ linkId }: { linkId: number }) {
-  const [data, setData] = useState<ShareAnalytics | null>(null)
-
-  useEffect(() => {
-    getShareAnalytics(linkId).then((res) => setData(res.data))
-  }, [linkId])
+  const { data } = useShareAnalytics(linkId)
 
   if (!data) {
     return <Loader2 size={18} className="mx-auto my-4 animate-spin text-[var(--dr-main-subtitle)]" />

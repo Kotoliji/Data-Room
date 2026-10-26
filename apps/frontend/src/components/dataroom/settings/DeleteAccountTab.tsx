@@ -2,6 +2,7 @@ import { Lock } from "lucide-react"
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { deleteAccount } from "@/lib/api"
+import { endSession } from "@/lib/session"
 
 export function DeleteAccountTab() {
   const navigate = useNavigate()
@@ -16,8 +17,7 @@ export function DeleteAccountTab() {
     const res = await deleteAccount(password)
     if (res.data) {
       if (userId) localStorage.removeItem(`dr-folders-${userId}`)
-      localStorage.removeItem("auth_token")
-      localStorage.removeItem("user")
+      endSession()
       navigate("/login")
     } else {
       setError(res.error ?? "Incorrect password")

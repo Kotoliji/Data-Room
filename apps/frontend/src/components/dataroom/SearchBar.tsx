@@ -13,7 +13,7 @@ export function SearchBar({ value, onChange }: SearchBarProps) {
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Search documents by name..."
+          placeholder="Search by name or text inside documents..."
           className="flex-1 bg-transparent font-[Karla,sans-serif] text-[17px] text-[var(--dr-main-search-text)] placeholder:opacity-75 outline-none"
         />
         <div className="flex items-center justify-center overflow-hidden rounded-xl p-2">

@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { FileText, Loader2, Quote, Sparkles } from "lucide-react"
 import type { DraftAnswer, OwnerQuestion } from "@/lib/types"
-import { answerQuestion, draftAnswer, getQuestions } from "@/lib/api"
+import { answerQuestion, draftAnswer } from "@/lib/api"
+import { useQuestions } from "@/lib/queries"
 import { timeAgo } from "@/lib/utils"
 
 const muted = "font-[Karla,sans-serif] text-[12px] text-[var(--dr-main-subtitle)]"
@@ -93,25 +95,15 @@ function QuestionCard({ question, onAnswered }: { question: OwnerQuestion; onAns
 
 export function QAView() {
   const [status, setStatus] = useState<"open" | "answered">("open")
-  const [questions, setQuestions] = useState<OwnerQuestion[] | null>(null)
-  const [openCount, setOpenCount] = useState(0)
+  const queryClient = useQueryClient()
+  const { data } = useQuestions(status)
+  const questions = data?.questions
+  const openCount = data?.open_count ?? 0
 
-  useEffect(() => {
-    getQuestions(status).then((res) => {
-      setQuestions(res.data?.questions ?? [])
-      setOpenCount(res.data?.open_count ?? 0)
-    })
-  }, [status])
+  const switchTo = (next: "open" | "answered") => setStatus(next)
 
-  const switchTo = (next: "open" | "answered") => {
-    setQuestions(null)
-    setStatus(next)
-  }
-
-  const handleAnswered = (answered: OwnerQuestion) => {
-    setQuestions((prev) => prev?.filter((q) => q.id !== answered.id) ?? null)
-    setOpenCount((n) => Math.max(0, n - 1))
-  }
+  // Answering moves a question between the Open and Answered lists: refetch both
+  const handleAnswered = () => queryClient.invalidateQueries({ queryKey: ["questions"] })
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-6 pb-10 md:px-[40px] md:pt-[40px]">
@@ -135,7 +127,7 @@ export function QAView() {
         </div>
       </div>
 
-      {questions === null ? (
+      {!questions ? (
         <Loader2 size={26} className="mx-auto mt-16 animate-spin text-[var(--dr-main-subtitle)]" />
       ) : questions.length === 0 ? (
         <p className="mt-16 text-center font-[Karla,sans-serif] text-[15px] text-[var(--dr-main-subtitle)]">

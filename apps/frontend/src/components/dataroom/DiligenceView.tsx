@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { CheckCircle2, CircleDashed, Loader2, ShieldAlert, Sparkles, XCircle } from "lucide-react"
-import type { ChecklistItem, DiligenceOverview } from "@/lib/types"
-import { analyzeUnprocessed, getDiligence, runDiligenceReview } from "@/lib/api"
+import type { ChecklistItem } from "@/lib/types"
+import { analyzeUnprocessed, runDiligenceReview } from "@/lib/api"
+import { keys, unwrap, useDiligence } from "@/lib/queries"
 import { SENSITIVE_LABELS } from "@/lib/labels"
 import { timeAgo } from "@/lib/utils"
 
@@ -84,32 +85,24 @@ function Checklist({ items }: { items: ChecklistItem[] }) {
 }
 
 export function DiligenceView() {
-  const [data, setData] = useState<DiligenceOverview | null>(null)
-  const [reviewing, setReviewing] = useState(false)
-  const [refresh, setRefresh] = useState(0)
+  const queryClient = useQueryClient()
+  // Polls on its own while documents are still being classified
+  const { data } = useDiligence()
 
-  useEffect(() => {
-    getDiligence().then((res) => setData(res.data))
-  }, [refresh])
-
-  // While documents are being classified, poll until they are done
-  useEffect(() => {
-    if (!data?.pending) return
-    const t = window.setTimeout(() => setRefresh((n) => n + 1), 3000)
-    return () => window.clearTimeout(t)
-  }, [data])
-
-  const handleReview = async () => {
-    setReviewing(true)
-    const res = await runDiligenceReview()
-    if (res.data) setData(res.data)
-    setReviewing(false)
-  }
-
-  const handleAnalyze = async () => {
-    await analyzeUnprocessed()
-    setRefresh((n) => n + 1)
-  }
+  const review = useMutation({
+    mutationFn: () => unwrap(runDiligenceReview()),
+    onSuccess: (overview) => queryClient.setQueryData(keys.diligence, overview),
+  })
+  const analyze = useMutation({
+    mutationFn: () => unwrap(analyzeUnprocessed()),
+    onSuccess: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: keys.diligence }),
+      queryClient.invalidateQueries({ queryKey: keys.files }),
+    ]),
+  })
+  const reviewing = review.isPending
+  const handleReview = () => review.mutate()
+  const handleAnalyze = () => analyze.mutate()
 
   if (!data) {
     return (

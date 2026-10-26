@@ -11,19 +11,26 @@ import { ShareDialog } from "./ShareDialog"
 import type { UploadedFile, FolderItem } from "@/lib/types"
 import { SearchBar } from "./SearchBar"
 import { ImportFilesModal } from "./ImportFilesModal"
-import { getFiles, deleteFile, uploadFiles, moveFile, renameFile, importDriveFiles, getFolders, getAllFolders, createFolder, deleteFolder as apiDeleteFolder, deleteFolderPermanent, restoreFolder, getTrashedFolders, getFolderPath, updateFolder, searchContent } from "@/lib/api"
+import { deleteFile, uploadFiles, moveFile, renameFile, importDriveFiles, getFolders, createFolder, deleteFolder as apiDeleteFolder, deleteFolderPermanent, restoreFolder, getTrashedFolders, getFolderPath, updateFolder } from "@/lib/api"
 import type { DriveFile } from "@/lib/types"
 import { TrashAnimationLayer } from "./TrashAnimation"
+import { useQueryClient } from "@tanstack/react-query"
+import { keys, useAllFolders, useContentSearch, useFiles } from "@/lib/queries"
+import { useDebouncedValue } from "@/lib/useDebouncedValue"
 
 const TOAST_DURATION_MS = 5000
 
 type UploadingFile = { id: string; original_name: string; size: number; status: "uploading" }
 
+// Stable empty defaults so memoized values don't recompute on every render while loading
+const NO_FILES: UploadedFile[] = []
+const NO_FOLDERS: FolderItem[] = []
+const NO_HITS: Record<number, string> = {}
+
 export function Layout() {
   const [search, setSearch] = useState("")
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([])
   const [activeFolder, setActiveFolder] = useState("All documents")
   const [activeTab, setActiveTab] = useState("Data Room")
@@ -32,7 +39,6 @@ export function Layout() {
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(null)
 
   const [subfolders, setSubfolders] = useState<FolderItem[]>([])
-  const [allUserFolders, setAllUserFolders] = useState<FolderItem[]>([])
   const [folderPath, setFolderPath] = useState<FolderItem[]>([])
   const [currentSubfolder, setCurrentSubfolder] = useState<number | null>(null)
   const [activeFolderName, setActiveFolderName] = useState<string | null>(null)
@@ -45,42 +51,21 @@ export function Layout() {
 
   const isLoggedIn = !!localStorage.getItem("user")
 
-  const fetchFiles = useCallback(async () => {
-    if (!isLoggedIn) return
-    const res = await getFiles()
-    if (res.data) setUploadedFiles(res.data.files)
-  }, [isLoggedIn])
+  // Server state lives in the React Query cache; handlers below keep their optimistic updates
+  const queryClient = useQueryClient()
+  const { data: uploadedFiles = NO_FILES } = useFiles(isLoggedIn)
+  const { data: allUserFolders = NO_FOLDERS } = useAllFolders(isLoggedIn)
+  const setUploadedFiles = useCallback(
+    (update: (prev: UploadedFile[]) => UploadedFile[]) => queryClient.setQueryData<UploadedFile[]>(keys.files, (prev) => update(prev ?? [])),
+    [queryClient],
+  )
+  const setAllUserFolders = useCallback(
+    (update: (prev: FolderItem[]) => FolderItem[]) => queryClient.setQueryData<FolderItem[]>(keys.folders, (prev) => update(prev ?? [])),
+    [queryClient],
+  )
 
   // Search inside documents (server full-text) in addition to the instant name filter
-  const [contentHits, setContentHits] = useState<Record<number, string>>({})
-  useEffect(() => {
-    const q = search.trim()
-    const t = window.setTimeout(async () => {
-      if (q.length < 3) { setContentHits({}); return }
-      const res = await searchContent(q)
-      setContentHits(Object.fromEntries((res.data?.results ?? []).map((r) => [r.file_id, r.snippet])))
-    }, 300)
-    return () => window.clearTimeout(t)
-  }, [search])
-
-  // Refresh while uploaded documents are still being classified in the background
-  useEffect(() => {
-    if (!uploadedFiles.some((f) => f.insight?.status === "pending")) return
-    const t = window.setTimeout(fetchFiles, 3000)
-    return () => window.clearTimeout(t)
-  }, [uploadedFiles, fetchFiles])
-
-  const fetchAllFolders = useCallback(async () => {
-    if (!isLoggedIn) return
-    const res = await getAllFolders()
-    if (res.data) setAllUserFolders(res.data.folders)
-  }, [isLoggedIn])
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchFiles()
-    fetchAllFolders()
-  }, [fetchFiles, fetchAllFolders])
+  const { data: contentHits = NO_HITS } = useContentSearch(useDebouncedValue(search.trim(), 300))
 
   // Parse the numeric folder id from activeFolder (e.g. "folder:5" -> 5)
   const activeFolderNumericId = useMemo(() => {
@@ -181,7 +166,7 @@ export function Layout() {
     } else if (res.error) {
       showToast(res.error)
     }
-  }, [deepestFolderId, showToast])
+  }, [deepestFolderId, showToast, setAllUserFolders])
 
   const handleDeleteSubfolder = useCallback(async (folderId: number) => {
     if (activeFolder === "Trash") {
@@ -206,7 +191,7 @@ export function Layout() {
         showToast(res.error)
       }
     }
-  }, [showToast, activeFolder])
+  }, [showToast, activeFolder, setAllUserFolders, setUploadedFiles])
 
   const handleRestoreSubfolder = useCallback(async (folderId: number) => {
     const res = await restoreFolder(folderId)
@@ -217,7 +202,7 @@ export function Layout() {
     } else {
       showToast(res.error)
     }
-  }, [showToast])
+  }, [showToast, setAllUserFolders])
 
   const handleRenameSubfolder = useCallback(async (folderId: number, name: string) => {
     const res = await updateFolder(folderId, { name })
@@ -235,7 +220,7 @@ export function Layout() {
     } else if (res.error) {
       showToast(res.error)
     }
-  }, [showToast])
+  }, [showToast, setUploadedFiles])
 
   const handleMoveFolderToFolder = useCallback(async (folderId: number, targetKey: string) => {
     const targetId = targetKey.startsWith("folder:") ? Number(targetKey.split(":")[1]) : null
@@ -247,7 +232,7 @@ export function Layout() {
       // Update allUserFolders so fileCounts recalculate
       setAllUserFolders((prev) => prev.map((f) => f.id === folderId ? { ...f, parent_id: targetId } : f))
     }
-  }, [])
+  }, [setAllUserFolders])
 
   const handleDriveImport = async (driveFiles: DriveFile[], folderId?: string) => {
     const placeholders: UploadingFile[] = driveFiles.map((f, i) => ({

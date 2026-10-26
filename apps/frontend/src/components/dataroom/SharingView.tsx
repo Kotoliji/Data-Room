@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { ChevronDown, Copy, Download, Eye, Link2, Loader2, Lock, LogIn, Ban } from "lucide-react"
 import type { ShareAccessEntry, ShareLink } from "@/lib/types"
-import { getShareAccesses, getShares, revokeShare, shareUrl } from "@/lib/api"
+import { revokeShare, shareUrl } from "@/lib/api"
+import { keys, useShareAccesses, useShares } from "@/lib/queries"
 import { timeAgo } from "@/lib/utils"
 import { ShareAnalyticsPanel } from "./ShareAnalyticsPanel"
 
@@ -21,13 +23,9 @@ function StatusBadge({ link }: { link: ShareLink }) {
 }
 
 function AccessTrail({ linkId }: { linkId: number }) {
-  const [entries, setEntries] = useState<ShareAccessEntry[] | null>(null)
+  const { data: entries } = useShareAccesses(linkId)
 
-  useEffect(() => {
-    getShareAccesses(linkId).then((res) => setEntries(res.data?.accesses ?? []))
-  }, [linkId])
-
-  if (entries === null) {
+  if (!entries) {
     return <Loader2 size={18} className="mx-auto my-3 animate-spin text-[var(--dr-main-subtitle)]" />
   }
   if (entries.length === 0) {
@@ -54,14 +52,12 @@ function AccessTrail({ linkId }: { linkId: number }) {
 }
 
 export function SharingView() {
-  const [links, setLinks] = useState<ShareLink[] | null>(null)
+  const queryClient = useQueryClient()
+  const { data: links } = useShares()
   const [expanded, setExpanded] = useState<number | null>(null)
   const [copiedId, setCopiedId] = useState<number | null>(null)
   const [panel, setPanel] = useState<"Analytics" | "Access log">("Analytics")
 
-  useEffect(() => {
-    getShares().then((res) => setLinks(res.data?.shares ?? []))
-  }, [])
 
   const handleCopy = async (link: ShareLink) => {
     await navigator.clipboard.writeText(shareUrl(link.token))
@@ -73,7 +69,7 @@ export function SharingView() {
     const res = await revokeShare(link.id)
     if (res.data) {
       const updated = res.data
-      setLinks((prev) => prev?.map((l) => (l.id === updated.id ? updated : l)) ?? null)
+      queryClient.setQueryData<ShareLink[]>(keys.shares, (prev) => prev?.map((l) => (l.id === updated.id ? updated : l)))
     }
   }
 
@@ -88,7 +84,7 @@ export function SharingView() {
         </p>
       </div>
 
-      {links === null ? (
+      {!links ? (
         <div className="flex flex-1 items-center justify-center pb-[80px]">
           <Loader2 size={28} className="animate-spin text-[var(--dr-main-subtitle)]" />
         </div>

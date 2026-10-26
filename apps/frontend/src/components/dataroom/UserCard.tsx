@@ -2,6 +2,7 @@ import { LogOut, UserCircle } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { API_BASE } from "@/lib/api"
 import type { User } from "@/lib/types"
+import { endSession } from "@/lib/session"
 
 interface UserCardProps {
   onSettingsClick: () => void
@@ -41,8 +42,7 @@ export function UserCard({ onSettingsClick }: UserCardProps) {
         <button
           onClick={(e) => {
             e.stopPropagation()
-            localStorage.removeItem("user")
-            localStorage.removeItem("auth_token")
+            endSession()
             navigate("/login")
           }}
           className="shrink-0 rounded-lg p-1.5 text-white/50 transition-colors hover:bg-white/10 hover:text-white"

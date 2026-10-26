@@ -335,6 +335,8 @@ The application uses server-signed Bearer tokens for API authentication:
 - **Tailwind CSS v4** for styling
 - **Shadcn/ui** for base components (dialogs, buttons, inputs)
 - Single `api.ts` file as the API client — all endpoints in one place
+- **TanStack Query** owns server state: one cache for files, folders, shares, analytics, diligence and Q&A. Background polling runs only while documents are being classified, content search is debounced, and the cache is cleared on every sign-in and sign-out so accounts never see each other's data
+- **Vitest + Testing Library** — API client, auth flow, protected routes, the investor share page and the main Data Room screen
 - Shared `types.ts` for all TypeScript interfaces
 
 ### Backend (`apps/backend/`)

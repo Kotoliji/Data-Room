@@ -1,7 +1,9 @@
-import { useEffect, useState, useCallback } from "react"
+import { useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Upload, Download, Trash2, Pencil, ArrowRight, Loader2 } from "lucide-react"
 import type { ActivityEntry } from "@/lib/types"
-import { getActivity, clearActivity } from "@/lib/api"
+import { clearActivity } from "@/lib/api"
+import { useActivity } from "@/lib/queries"
 import { timeAgo } from "@/lib/utils"
 
 const ACTION_CONFIG: Record<string, { icon: typeof Upload; color: string; label: string }> = {
@@ -12,32 +14,22 @@ const ACTION_CONFIG: Record<string, { icon: typeof Upload; color: string; label:
   moved: { icon: ArrowRight, color: "text-[#3FDD78]", label: "Moved" },
 }
 
+const NO_ENTRIES: ActivityEntry[] = []
+
 interface ActivityViewProps {
   folderId?: string
 }
 
 export function ActivityView({ folderId }: ActivityViewProps) {
-  const [entries, setEntries] = useState<ActivityEntry[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const { data: entries = NO_ENTRIES, isPending: loading } = useActivity(folderId)
   const [clearing, setClearing] = useState(false)
-
-  const fetchActivity = useCallback(async () => {
-    setLoading(true)
-    const res = await getActivity(folderId)
-    if (res.data) setEntries(res.data.activity)
-    setLoading(false)
-  }, [folderId])
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchActivity()
-  }, [fetchActivity])
 
   const handleClear = async () => {
     setClearing(true)
     const res = await clearActivity()
     if (!res.error) {
-      setEntries([])
+      await queryClient.invalidateQueries({ queryKey: ["activity"] })
     }
     setClearing(false)
   }

@@ -6,6 +6,7 @@ import { AuthTabToggle } from "./AuthTabToggle"
 import { SocialButtons } from "./SocialButtons"
 import { AuthInput } from "./AuthInput"
 import { register, API_BASE } from "@/lib/api"
+import { startSession } from "@/lib/session"
 
 export function CreateAccountForm() {
   const navigate = useNavigate()
@@ -64,8 +65,7 @@ export function CreateAccountForm() {
 
     if (res.data) {
       const { token, ...user } = res.data
-      localStorage.setItem("auth_token", token)
-      localStorage.setItem("user", JSON.stringify(user))
+      startSession(token, user)
       navigate("/")
     }
   }

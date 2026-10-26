@@ -4,6 +4,7 @@ import { Globe } from "lucide-react"
 import { getSessions, revokeSession, revokeAllSessions } from "@/lib/api"
 import type { Session, User } from "@/lib/types"
 import { ChromeIcon, SafariIcon } from "@/components/icons"
+import { endSession } from "@/lib/session"
 
 function formatDate(iso: string): string {
   const d = new Date(iso)
@@ -29,8 +30,7 @@ function getCurrentSessionId(): number | null {
 }
 
 function logoutAndRedirect(navigate: ReturnType<typeof useNavigate>) {
-  localStorage.removeItem("auth_token")
-  localStorage.removeItem("user")
+  endSession()
   navigate("/login")
 }
 
