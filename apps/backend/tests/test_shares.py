@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app import db
 from app.models import ShareLink
@@ -82,7 +82,7 @@ def test_revoked_and_expired_links(app, client, auth):
 
     link2 = share(client, auth, expires_in_days=1)
     with app.app_context():
-        db.session.get(ShareLink, link2["id"]).expires_at = datetime.utcnow() - timedelta(minutes=1)
+        db.session.get(ShareLink, link2["id"]).expires_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1)
         db.session.commit()
     assert client.get(f"/api/v1/public/shares/{link2['token']}").status_code == 410
 

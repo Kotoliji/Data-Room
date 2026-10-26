@@ -1,6 +1,6 @@
 from functools import wraps
 
-from flask import request, jsonify, current_app
+from flask import g, request, jsonify, current_app
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from app import db
@@ -35,6 +35,8 @@ def get_user_from_header() -> User | None:
     session = db.session.get(Session, session_id)
     if not session or not session.is_active or session.user_id != user_id:
         return None
+
+    g.session_id = session_id  # lets handlers tell the caller's session apart from the others
 
     return db.session.get(User, user_id)
 

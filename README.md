@@ -1,5 +1,7 @@
 # Acme Corp Data Room
 
+[![CI](https://github.com/Kotoliji/Data-Room/actions/workflows/ci.yml/badge.svg)](https://github.com/Kotoliji/Data-Room/actions/workflows/ci.yml)
+
 A virtual Data Room MVP for securely storing and managing due diligence documents. Users connect their Google Drive via OAuth, browse and import files, then view and manage them in an organized repository.
 
 ---
@@ -87,7 +89,7 @@ Open `http://localhost:5173` in your browser.
 ```bash
 cd apps/backend
 pip install -r requirements-dev.txt
-pytest -q          # 53 tests: auth, files, folders/trash, sharing scope, Drive import (mocked), security, migrations
+pytest -q          # 66 tests: auth (login, reset, sessions), files, folders/trash, sharing scope, Drive import (mocked), security, migrations
 ```
 
 GitHub Actions runs backend tests plus frontend lint and build on every push and pull request.
@@ -297,6 +299,8 @@ The application uses server-signed Bearer tokens for API authentication:
 - Tokens are bound to a specific user session and validated server-side
 - Sessions can be individually revoked (token becomes invalid immediately)
 - File viewing uses separate short-lived signed URLs (60s TTL)
+- Password reset links are single-use: they carry a fingerprint of the full password hash, so they die the moment the password changes
+- Resetting the password signs out every session; changing it signs out every session except the current one
 
 > **Note:** For a production deployment, tokens should be stored in HttpOnly cookies
 > instead of localStorage to prevent XSS-based token theft. The current localStorage

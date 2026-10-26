@@ -1,8 +1,9 @@
+import hashlib
 import os
 import time
 from pathlib import Path
 
-from flask import Blueprint, Response, request, jsonify, current_app, send_file
+from flask import Blueprint, Response, g, request, jsonify, current_app, send_file
 from sqlalchemy.exc import IntegrityError
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 from werkzeug.utils import secure_filename
@@ -27,6 +28,11 @@ def _avatar_url(user: User) -> str | None:
     if user.avatar_path:
         return f"/api/v1/auth/avatar/{user.id}"
     return None
+
+
+def _password_version(user: User) -> str:
+    """Fingerprint of the full password hash (a hash prefix like "scrypt:3" is the same for everyone)."""
+    return hashlib.sha256(user.password_hash.encode()).hexdigest()[:16]
 
 
 def _user_dict(user: User) -> dict:
@@ -242,8 +248,8 @@ def forgot_password() -> tuple[Response, int]:
         return safe_response
 
     serializer = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
-    # Include password_hash prefix so token is invalidated once password changes
-    token = serializer.dumps({"uid": user.id, "ph": user.password_hash[:8]}, salt="password-reset")
+    # Bind the link to the current password: once it changes, the link is dead (single use)
+    token = serializer.dumps({"uid": user.id, "pv": _password_version(user)}, salt="password-reset")
     frontend_url = current_app.config.get("FRONTEND_URL", "http://localhost:5173")
     reset_link = f"{frontend_url}/reset-password?token={token}"
 
@@ -274,23 +280,16 @@ def reset_password() -> tuple[Response, int]:
     except (SignatureExpired, BadSignature):
         return jsonify({"data": None, "error": "Invalid or expired reset link"}), 400
 
-    # Support both old (plain user_id) and new (dict with uid + ph) token formats
-    if isinstance(payload, dict):
-        user_id = payload.get("uid")
-        pw_hash_prefix = payload.get("ph")
-    else:
-        user_id = payload
-        pw_hash_prefix = None
-
-    user = db.session.get(User, user_id)
+    user = db.session.get(User, payload.get("uid")) if isinstance(payload, dict) else None
     if not user:
         return jsonify({"data": None, "error": "Invalid or expired reset link"}), 400
 
-    # If token contains password hash prefix, verify it matches current hash (prevents replay)
-    if pw_hash_prefix and user.password_hash[:8] != pw_hash_prefix:
+    if payload.get("pv") != _password_version(user):
         return jsonify({"data": None, "error": "This reset link has already been used"}), 400
 
     user.set_password(password)
+    # Whoever knew the old password may still hold a session — end all of them
+    Session.query.filter_by(user_id=user.id, is_active=True).update({"is_active": False})
     db.session.commit()
 
     current_app.logger.info("Password reset for user: %s", user.email)
@@ -320,6 +319,9 @@ def change_password(user: User) -> tuple[Response, int]:
         return jsonify({"data": None, "error": "Password must be at least 8 characters"}), 400
 
     user.set_password(new_password)
+    # Keep this device signed in, sign out every other one
+    (Session.query.filter(Session.user_id == user.id, Session.is_active.is_(True), Session.id != g.session_id)
+     .update({"is_active": False}, synchronize_session=False))
     db.session.commit()
 
     current_app.logger.info("Password changed for user %s", user.id)
