@@ -310,10 +310,11 @@ def _heuristic_draft(question: str, docs: list[File]) -> dict:
     words = _keywords(question)
     citations = []
     for f in docs:
-        for sentence in re.split(r"(?<=[.!?])\s+", " ".join(f.insight.text.split())):
-            if len(words & _keywords(sentence)) >= 2 and len(sentence) < 400:
-                citations.append({"file_id": f.id, "quote": sentence})
-                break
+        sentences = [x for x in re.split(r"(?<=[.!?])\s+", " ".join(f.insight.text.split())) if len(x) < 400]
+        # The sentence sharing the most words with the question, not merely the first that shares two
+        best = max(sentences, key=lambda x: len(words & _keywords(x)), default=None)
+        if best and len(words & _keywords(best)) >= 2:
+            citations.append({"file_id": f.id, "quote": best})
     answer = ("Thank you for the question. The relevant information is in the documents cited below."
               if citations else "Thank you for the question. We will review it and follow up with the relevant documents.")
     return {"answer": answer, "citations": citations}

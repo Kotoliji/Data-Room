@@ -82,3 +82,17 @@ def test_claude_draft_citations_are_verified(app, client, auth, monkeypatch):
     draft = client.post(f"/api/v1/questions/{qid}/draft", headers=auth).get_json()["data"]
     assert draft["source"] == "claude" and draft["answer"] == "Five years."
     assert [c["quote"] for c in draft["citations"]] == ["The lease  term is five years."]
+
+
+def test_heuristic_draft_quotes_the_most_relevant_sentence(client, auth):
+    folder = client.post("/api/v1/folders", headers=auth, json={"name": "Contracts"}).get_json()["data"]
+    upload(client, auth, "msa.txt",
+           b"This master services agreement between Acme and Globex runs for three years. "
+           b"Either party may terminate with 180 days notice. "
+           b"A change of control of Acme requires notice to Globex within 30 days.",
+           "text/plain", folder_id=f"folder:{folder['id']}")
+    link = share(client, auth, folder_id=folder["id"])
+    _, access = unlock(client, link["token"])
+    qid = ask(client, link, access, body="Does the Globex agreement require notice on a change of control?").get_json()["data"]["id"]
+    draft = client.post(f"/api/v1/questions/{qid}/draft", headers=auth).get_json()["data"]
+    assert [c["quote"] for c in draft["citations"]] == ["A change of control of Acme requires notice to Globex within 30 days."]
