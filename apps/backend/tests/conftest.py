@@ -1,15 +1,20 @@
 import io
+import os
 from urllib.parse import urlsplit
 
 import pytest
+from sqlalchemy import text
 
 from app import create_app, db, limiter
+
+PG_URL = os.environ.get("TEST_DATABASE_URL")
 
 
 @pytest.fixture
 def app(tmp_path, monkeypatch):
     monkeypatch.setenv("SECRET_KEY", "test-secret-key-0123456789")
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
+    # TEST_DATABASE_URL runs the suite against a real Postgres (CI does both)
+    monkeypatch.setenv("DATABASE_URL", PG_URL or f"sqlite:///{tmp_path / 'test.db'}")
     monkeypatch.setenv("STORAGE_DIR", str(tmp_path / "storage"))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "")  # tests never call the real API
     monkeypatch.setenv("INSIGHTS_ASYNC", "0")    # analyze inline so assertions see results
@@ -18,6 +23,10 @@ def app(tmp_path, monkeypatch):
     yield app
     with app.app_context():
         db.session.remove()
+        if PG_URL:  # shared server database: leave it empty for the next test
+            db.drop_all()
+            db.session.execute(text("DROP TABLE IF EXISTS alembic_version"))
+            db.session.commit()
         db.engine.dispose()
 
 

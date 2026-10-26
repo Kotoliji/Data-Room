@@ -64,6 +64,15 @@ It contains four folders of sample M&A documents (already classified, one flagge
 
 ## Quick Start (Local)
 
+**One command (Docker):** the full stack (app + Postgres) with the demo room pre-loaded:
+
+```bash
+docker compose up --build        # http://localhost:8080  ->  "Try the demo account"
+./scripts/smoke.sh               # end-to-end check over HTTP
+```
+
+**Without Docker** (hot reload for development):
+
 ```bash
 # 1. Clone the repo
 git clone <repo-url> && cd Data-Room
@@ -97,7 +106,13 @@ cd apps/frontend
 npm test           # Vitest + Testing Library: API client, auth flow, protected routes, share gate
 ```
 
-GitHub Actions runs backend and frontend tests, lint, the production build and the Docker image build on every push and pull request.
+GitHub Actions runs on every push and pull request:
+
+- the backend suite twice, on SQLite and on a real Postgres (`TEST_DATABASE_URL`);
+- frontend tests, lint and the production build;
+- the production image with Postgres via `docker compose`, checked end to end by `scripts/smoke.sh`.
+
+The Postgres run has already caught two bugs that SQLite hid: a missing driver after a SQLAlchemy upgrade, and a `DISTINCT` + `ORDER BY` query that Postgres rejects.
 
 ### Database migrations
 
@@ -196,7 +211,7 @@ BACKEND_URL=http://localhost:5000
 
 ## Design Decisions
 
-### Database: SQLite (Postgres-ready)
+### Database: SQLite locally, Postgres in CI and Compose
 
 SQLite was chosen for zero-setup local development — it ships with Python and needs no external server. All database access goes through SQLAlchemy ORM, so migrating to Postgres for production requires only changing the connection string. For an MVP handling single-user workflows, SQLite is more than sufficient.
 

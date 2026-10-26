@@ -1,0 +1,38 @@
+# Full stack in one command: docker compose up --build  ->  http://localhost:8080
+# The app image serves the SPA and the API; data goes to Postgres and a named volume.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: dataroom
+      POSTGRES_PASSWORD: dataroom
+      POSTGRES_DB: dataroom
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dataroom"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgresql://dataroom:dataroom@db:5432/dataroom
+      SECRET_KEY: ${SECRET_KEY:-local-compose-secret-change-me}
+      PUBLIC_URL: http://localhost:8080
+      DEMO_SEED: "1"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    volumes:
+      - storage:/data/storage
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  storage:

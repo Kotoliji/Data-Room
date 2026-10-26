@@ -171,7 +171,8 @@ class ShareLink(db.Model):
             "revoked": self.revoked,
             "expired": self.is_expired(),
             "created_at": self.created_at.isoformat(),
-            "viewer_count": self.accesses.with_entities(ShareAccess.viewer_email).distinct().count(),
+            # order_by(None): Postgres rejects DISTINCT with an ORDER BY on a column it doesn't select
+            "viewer_count": self.accesses.order_by(None).with_entities(ShareAccess.viewer_email).distinct().count(),
             "event_count": self.accesses.count(),
             "last_access_at": last.created_at.isoformat() if last else None,
         }

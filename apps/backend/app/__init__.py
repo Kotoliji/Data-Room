@@ -33,9 +33,11 @@ def create_app() -> Flask:
     app.config["SECRET_KEY"] = secret
     app.config["TOKEN_ENCRYPTION_KEY"] = os.environ.get("TOKEN_ENCRYPTION_KEY", "")
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///dataroom.db")
-    # Render uses postgres:// but SQLAlchemy needs postgresql://
-    if app.config["SQLALCHEMY_DATABASE_URI"].startswith("postgres://"):
-        app.config["SQLALCHEMY_DATABASE_URI"] = app.config["SQLALCHEMY_DATABASE_URI"].replace("postgres://", "postgresql://", 1)
+    # Hosts hand out postgres:// or postgresql://; pin the driver explicitly (psycopg 3)
+    # so it doesn't depend on which default the installed SQLAlchemy version picks
+    for prefix in ("postgres://", "postgresql://"):
+        if app.config["SQLALCHEMY_DATABASE_URI"].startswith(prefix):
+            app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql+psycopg://" + app.config["SQLALCHEMY_DATABASE_URI"][len(prefix):]
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["STORAGE_DIR"] = os.environ.get("STORAGE_DIR", str(Path(app.root_path).parent / "storage"))
     app.config["SMTP_USER"] = os.environ.get("SMTP_USER", "")
