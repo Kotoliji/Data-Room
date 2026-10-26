@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { getProfile, login } from "./api"
+import { getProfile, login, onUnauthorized } from "./api"
 
 function stubFetch(impl: () => Promise<Response>) {
   const fetchMock = vi.fn(impl)
@@ -15,8 +15,8 @@ afterEach(() => {
 })
 
 describe("API client", () => {
-  it("sends the stored session token as a Bearer header", async () => {
-    localStorage.setItem("auth_token", "abc123")
+  it("lets the browser attach the session cookie and marks the request as ours", async () => {
+    localStorage.setItem("auth_token", "legacy-token")  // left by an old version: must not be sent
     const fetchMock = stubFetch(async () => json({ data: { id: 1, name: "A", email: "a@a.io" }, error: null }))
 
     const res = await getProfile()
@@ -24,14 +24,21 @@ describe("API client", () => {
     expect(res.data?.email).toBe("a@a.io")
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toMatch(/\/api\/v1\/auth\/me$/)
-    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer abc123")
+    expect(init.credentials).toBe("include")
+    expect(init.headers).toMatchObject({ "X-Requested-With": "dataroom" })
+    expect(init.headers).not.toHaveProperty("Authorization")
   })
 
-  it("sends no Authorization header when signed out", async () => {
-    const fetchMock = stubFetch(async () => json({ data: null, error: null }))
+  it("reports an expired session, but not a wrong password", async () => {
+    const handler = vi.fn()
+    onUnauthorized(handler)
+    stubFetch(async () => json({ data: null, error: "Invalid email or password" }, 401))
+    await login({ email: "a@a.io", password: "wrong" })
+    expect(handler).not.toHaveBeenCalled()
+
+    stubFetch(async () => json({ data: null, error: "Unauthorized" }, 401))
     await getProfile()
-    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-    expect(init.headers).not.toHaveProperty("Authorization")
+    expect(handler).toHaveBeenCalledTimes(1)
   })
 
   it("returns the server's error message on a failed request", async () => {

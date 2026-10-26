@@ -52,7 +52,8 @@ def create_app() -> Flask:
     app.config["INSIGHTS_ASYNC"] = os.environ.get("INSIGHTS_ASYNC", "1") != "0"
     app.config["DEMO_SEED"] = os.environ.get("DEMO_SEED") == "1"
 
-    CORS(app, origins=[app.config["FRONTEND_URL"]])
+    # Credentials allowed only for our own frontend origin (local dev runs it on another port)
+    CORS(app, origins=[app.config["FRONTEND_URL"]], supports_credentials=True)
     db.init_app(app)
     limiter.init_app(app)
     migrate.init_app(app, db, directory=str(MIGRATIONS_DIR))

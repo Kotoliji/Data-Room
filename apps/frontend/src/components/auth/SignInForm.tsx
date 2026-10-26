@@ -36,8 +36,7 @@ export function SignInForm() {
       setSearchParams({}, { replace: true })
       exchangeGoogleCode(googleCode).then((res) => {
         if (res.data && typeof res.data.token === "string" && typeof res.data.id === "number") {
-          const { token, ...user } = res.data
-          startSession(token, user)
+          startSession(res.data)
           // Full page reload to reinitialize app state after login
           window.location.href = "/"
         } else {
@@ -64,8 +63,7 @@ export function SignInForm() {
     }
 
     if (res.data) {
-      const { token, ...user } = res.data
-      startSession(token, user)
+      startSession(res.data)
       navigate("/")
     }
   }

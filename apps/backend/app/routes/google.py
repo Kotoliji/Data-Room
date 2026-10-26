@@ -10,7 +10,7 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from app import db, limiter
 from app.models import User, Session
-from app.utils import require_auth, parse_device, generate_session_token
+from app.utils import require_auth, parse_device, generate_session_token, set_session_cookie
 from app.constants import GOOGLE_AUTH_URI, GOOGLE_TOKEN_URI, OAUTH_STATE_MAX_AGE, GOOGLE_AUTH_VERIFY_MAX_AGE
 
 # One-time authorization codes for Google login (code → {data, created_at})
@@ -283,7 +283,7 @@ def google_exchange() -> tuple[Response, int]:
         _pending_google_auth.pop(code, None)
         return jsonify({"data": None, "error": "Code already used"}), 400
 
-    return jsonify({"data": entry["data"], "error": None}), 200
+    return set_session_cookie(jsonify({"data": entry["data"], "error": None}), entry["data"]["token"]), 200
 
 
 @google_bp.route("/google/verify", methods=["GET"])

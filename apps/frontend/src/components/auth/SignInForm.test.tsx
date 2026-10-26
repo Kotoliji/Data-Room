@@ -8,6 +8,7 @@ import { useAuthConfig } from "@/lib/useAuthConfig"
 
 vi.mock("@/lib/api", () => ({
   login: vi.fn(),
+  logout: vi.fn(),
   exchangeGoogleCode: vi.fn(),
   getGoogleLoginUrl: vi.fn(() => "/google"),
 }))
@@ -62,8 +63,9 @@ describe("SignInForm", () => {
 
     expect(await screen.findByText("Data room home")).toBeInTheDocument()
     expect(loginMock).toHaveBeenCalledWith({ email: "a@acme.io", password: "password123" })
-    expect(localStorage.getItem("auth_token")).toBe("tok-1")
-    expect(JSON.parse(localStorage.getItem("user") ?? "{}")).toEqual({ id: 1, name: "Alex", email: "a@acme.io" })
+    // The token stays in the server's HttpOnly cookie; only the profile is kept for the UI
+    expect(JSON.stringify({ ...localStorage })).not.toContain("tok-1")
+    expect(JSON.parse(localStorage.getItem("user") ?? "{}")).toMatchObject({ id: 1, name: "Alex", email: "a@acme.io" })
   })
 
   it("signs in with one click when the server offers a demo account", async () => {

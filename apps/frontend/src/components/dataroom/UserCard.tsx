@@ -42,8 +42,7 @@ export function UserCard({ onSettingsClick }: UserCardProps) {
         <button
           onClick={(e) => {
             e.stopPropagation()
-            endSession()
-            navigate("/login")
+            endSession().then(() => navigate("/login"))
           }}
           className="shrink-0 rounded-lg p-1.5 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
           aria-label="Log out"

@@ -64,8 +64,7 @@ export function CreateAccountForm() {
     }
 
     if (res.data) {
-      const { token, ...user } = res.data
-      startSession(token, user)
+      startSession(res.data)
       navigate("/")
     }
   }

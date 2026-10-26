@@ -3,21 +3,35 @@ import type { ApiResponse, User, AuthResponse, RegisterPayload, LoginPayload, Me
 export const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5000"
 const BASE_URL = `${API_BASE}/api/v1`
 
-function getToken(): string | null {
-  return localStorage.getItem("auth_token")
+// The session lives in an HttpOnly cookie the browser attaches itself; scripts never see it.
+// The custom header proves the request came from our own code (CSRF check for cookie auth).
+const CSRF_HEADER = { "X-Requested-With": "dataroom" }
+
+let unauthorizedHandler: (() => void) | null = null
+
+/** Called when the server says the session is gone (expired, revoked, signed out elsewhere). */
+export function onUnauthorized(handler: () => void): void {
+  unauthorizedHandler = handler
+}
+
+function handleStatus(endpoint: string, status: number): void {
+  // Wrong credentials on the sign-in form and public share links are not "session expired"
+  const expected = endpoint.startsWith("/auth/login") || endpoint.startsWith("/public/")
+  if (status === 401 && !expected) unauthorizedHandler?.()
 }
 
 async function request<T>(endpoint: string, options: RequestInit): Promise<ApiResponse<T>> {
-  const token = getToken()
   try {
     const res = await fetch(`${BASE_URL}${endpoint}`, {
       ...options,
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
+        ...CSRF_HEADER,
         ...((options.headers as Record<string, string>) ?? {}),
-        ...(token ? { "Authorization": `Bearer ${token}` } : {}),
       },
     })
+    handleStatus(endpoint, res.status)
     if (!res.ok) {
       const body = await res.json().catch(() => null) as ApiResponse<T> | null
       return { data: null, error: body?.error ?? `Request failed (${res.status})` }
@@ -29,13 +43,14 @@ async function request<T>(endpoint: string, options: RequestInit): Promise<ApiRe
 }
 
 async function requestFormData<T>(endpoint: string, body: FormData): Promise<ApiResponse<T>> {
-  const token = getToken()
   try {
     const res = await fetch(`${BASE_URL}${endpoint}`, {
       method: "POST",
-      headers: token ? { "Authorization": `Bearer ${token}` } : {},
+      credentials: "include",
+      headers: CSRF_HEADER,
       body,
     })
+    handleStatus(endpoint, res.status)
     if (!res.ok) {
       const respBody = await res.json().catch(() => null) as ApiResponse<T> | null
       return { data: null, error: respBody?.error ?? `Request failed (${res.status})` }
@@ -72,6 +87,10 @@ export function resetPassword(token: string, password: string): Promise<ApiRespo
     method: "POST",
     body: JSON.stringify({ token, password }),
   })
+}
+
+export function logout(): Promise<ApiResponse<MessageResponse>> {
+  return request<MessageResponse>("/auth/logout", { method: "POST" })
 }
 
 export function getProfile(): Promise<ApiResponse<User>> {

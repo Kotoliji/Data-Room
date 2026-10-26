@@ -11,7 +11,8 @@ from werkzeug.utils import secure_filename
 from app import db, limiter
 from app.models import User, Session, File, Folder, ActivityLog, ShareLink, DocumentInsight, DiligenceReview
 from app.services.email_service import send_reset_email
-from app.utils import require_auth, parse_device, generate_session_token, is_demo_account, demo_locked
+from app.utils import (require_auth, parse_device, generate_session_token, is_demo_account, demo_locked,
+                       set_session_cookie, clear_session_cookie)
 from app.constants import PASSWORD_RESET_TOKEN_MAX_AGE
 
 auth_bp = Blueprint("auth", __name__)
@@ -89,7 +90,8 @@ def register() -> tuple[Response, int]:
 
     current_app.logger.info("User registered: %s", email)
     token = generate_session_token(user.id, session.id)
-    return jsonify({"data": {**_user_dict(user), "session_id": session.id, "token": token}, "error": None}), 201
+    response = jsonify({"data": {**_user_dict(user), "session_id": session.id, "token": token}, "error": None})
+    return set_session_cookie(response, token), 201
 
 
 @auth_bp.route("/login", methods=["POST"])
@@ -111,7 +113,8 @@ def login() -> tuple[Response, int]:
 
     current_app.logger.info("User logged in: %s", email)
     token = generate_session_token(user.id, session.id)
-    return jsonify({"data": {**_user_dict(user), "session_id": session.id, "token": token}, "error": None}), 200
+    response = jsonify({"data": {**_user_dict(user), "session_id": session.id, "token": token}, "error": None})
+    return set_session_cookie(response, token), 200
 
 
 # --------------- Profile endpoints ---------------
@@ -375,7 +378,18 @@ def revoke_all_sessions(user: User) -> tuple[Response, int]:
     db.session.commit()
 
     current_app.logger.info("All sessions revoked for user %s", user.id)
-    return jsonify({"data": {"message": "All sessions revoked"}, "error": None}), 200
+    return clear_session_cookie(jsonify({"data": {"message": "All sessions revoked"}, "error": None})), 200
+
+
+@auth_bp.route("/logout", methods=["POST"])
+@require_auth
+def logout(user: User) -> tuple[Response, int]:
+    """End this session on the server, not just in the browser."""
+    session = db.session.get(Session, g.session_id)
+    if session:
+        session.is_active = False
+        db.session.commit()
+    return clear_session_cookie(jsonify({"data": {"message": "Signed out"}, "error": None})), 200
 
 
 @auth_bp.route("/account", methods=["DELETE"])

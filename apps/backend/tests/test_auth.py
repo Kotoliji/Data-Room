@@ -44,8 +44,8 @@ def test_login_does_not_reveal_which_part_was_wrong(client, auth):
     assert r.status_code == 200 and client.get("/api/v1/auth/me", headers=bearer(r)).get_json()["data"]["email"] == "owner@acme.io"
 
 
-def test_tampered_or_missing_token_is_rejected(client, auth):
-    assert client.get("/api/v1/auth/me").status_code == 401
+def test_tampered_or_missing_token_is_rejected(app, client, auth):
+    assert app.test_client().get("/api/v1/auth/me").status_code == 401  # fresh client: no cookie either
     token = auth["Authorization"].split()[1]
     assert client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token[:-2]}xx"}).status_code == 401
 
@@ -130,3 +130,37 @@ def test_revoke_all_signs_out_everywhere(client, auth):
     assert client.delete("/api/v1/auth/sessions", headers=auth).status_code == 200
     assert client.get("/api/v1/auth/me", headers=auth).status_code == 401
     assert client.get("/api/v1/auth/me", headers=laptop).status_code == 401
+
+
+# --------------- Browser session cookie ---------------
+
+CSRF = {"X-Requested-With": "dataroom"}
+
+
+def test_browser_session_lives_in_an_httponly_cookie(app):
+    c = app.test_client()
+    r = c.post("/api/v1/auth/register", json={"name": "A", "email": "a@acme.io", "password": "password123"},
+               headers={"X-Forwarded-Proto": "https"})
+    cookie = r.headers["Set-Cookie"]
+    for flag in ("dr_session=", "HttpOnly", "Secure", "SameSite=Lax", "Path=/api"):
+        assert flag in cookie
+    assert c.get("/api/v1/auth/me").status_code == 200  # no Authorization header, cookie only
+
+
+def test_cookie_requests_that_change_data_need_the_csrf_header(app):
+    c = app.test_client()
+    c.post("/api/v1/auth/register", json={"name": "A", "email": "a@acme.io", "password": "password123"})
+    forged = c.post("/api/v1/folders", json={"name": "Planted"})
+    assert forged.status_code == 403 and forged.get_json()["error"] == "Missing CSRF header"
+    assert c.post("/api/v1/folders", json={"name": "Mine"}, headers=CSRF).status_code == 201
+    assert c.get("/api/v1/folders").status_code == 200  # reads stay simple
+
+
+def test_logout_ends_the_session_on_the_server(app):
+    c = app.test_client()
+    token = c.post("/api/v1/auth/register", json={"name": "A", "email": "a@acme.io", "password": "password123"}).get_json()["data"]["token"]
+    r = c.post("/api/v1/auth/logout", headers=CSRF)
+    assert r.status_code == 200 and "dr_session=;" in r.headers["Set-Cookie"]
+    assert c.get("/api/v1/auth/me").status_code == 401
+    # A copy of the token taken before logout is dead too
+    assert app.test_client().get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"}).status_code == 401

@@ -21,15 +21,8 @@ describe("ProtectedRoute", () => {
     expect(screen.queryByText("Data room")).not.toBeInTheDocument()
   })
 
-  it("requires both the user and the token", () => {
+  it("renders the page for signed-in users (the cookie itself is checked by the API)", () => {
     localStorage.setItem("user", JSON.stringify({ id: 1 }))
-    renderAt("/")
-    expect(screen.getByText("Sign in page")).toBeInTheDocument()
-  })
-
-  it("renders the page for signed-in users", () => {
-    localStorage.setItem("user", JSON.stringify({ id: 1 }))
-    localStorage.setItem("auth_token", "token")
     renderAt("/")
     expect(screen.getByText("Data room")).toBeInTheDocument()
   })

@@ -297,19 +297,15 @@ Capped at 100 entries per user — the oldest entry is automatically pruned when
 
 ## Authentication Model
 
-The application uses server-signed Bearer tokens for API authentication:
-
-- **Login/Register** returns a signed session token (via `itsdangerous`)
-- All authenticated API requests send `Authorization: Bearer <token>` header
-- Tokens are bound to a specific user session and validated server-side
-- Sessions can be individually revoked (token becomes invalid immediately)
+- **Browser sessions live in an HttpOnly cookie** (`dr_session`: `HttpOnly`, `Secure` over HTTPS, `SameSite=Lax`, scoped to `/api`). Page scripts never see the token, so an XSS bug cannot steal it.
+- **CSRF:** `SameSite=Lax` keeps the cookie off cross-site POSTs. On top of that, every cookie-authenticated request that changes data must carry `X-Requested-With: dataroom`. Another site cannot add that header without passing our CORS policy, which only allows our own origin.
+- The token is a server-signed session reference (`itsdangerous`). Every request checks that the session is still active, so revoking a session or signing out takes effect immediately. `POST /auth/logout` ends the session on the server, not just in the browser.
+- API clients and tests can still send the same token as `Authorization: Bearer <token>`.
+- The frontend keeps only the public profile in `localStorage`, for the UI. A `401` from any API call clears it and returns to sign-in.
 - File viewing uses separate short-lived signed URLs (60s TTL)
 - Password reset links are single-use: they carry a fingerprint of the full password hash, so they die the moment the password changes
 - Resetting the password signs out every session; changing it signs out every session except the current one
 
-> **Note:** For a production deployment, tokens should be stored in HttpOnly cookies
-> instead of localStorage to prevent XSS-based token theft. The current localStorage
-> approach was chosen for development simplicity.
 
 ---
 

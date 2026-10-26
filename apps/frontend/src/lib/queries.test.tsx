@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { renderHook, waitFor } from "@testing-library/react"
 import { QueryClientProvider } from "@tanstack/react-query"
 import type { ReactNode } from "react"
-import { getFiles } from "./api"
+import { getFiles, logout } from "./api"
 import { keys, queryClient, unwrap, useFiles } from "./queries"
 import { endSession, startSession } from "./session"
 import type { UploadedFile } from "./types"
 
-vi.mock("./api", () => ({ getFiles: vi.fn() }))
+vi.mock("./api", () => ({ getFiles: vi.fn(), logout: vi.fn(async () => ({ data: { message: "ok" }, error: null })) }))
 
 const file = (status: "pending" | "ready"): UploadedFile => ({
   id: 1, name: "a.pdf", original_name: "a.pdf", mime_type: "application/pdf", size: 1, folder_id: "all",
@@ -58,15 +58,21 @@ describe("useFiles", () => {
 })
 
 describe("session helpers", () => {
-  it("drop cached data so the next account never sees the previous one's files", () => {
+  it("drop cached data so the next account never sees the previous one's files", async () => {
     queryClient.setQueryData(keys.files, [file("ready")])
-    startSession("token-b", { id: 2, name: "B", email: "b@acme.io" })
+    startSession({ id: 2, name: "B", email: "b@acme.io", token: "secret-token" })
     expect(queryClient.getQueryData(keys.files)).toBeUndefined()
-    expect(localStorage.getItem("auth_token")).toBe("token-b")
 
     queryClient.setQueryData(keys.files, [file("ready")])
-    endSession()
+    await endSession()
+    expect(logout).toHaveBeenCalled()  // the server-side session is ended too
     expect(queryClient.getQueryData(keys.files)).toBeUndefined()
-    expect(localStorage.getItem("auth_token")).toBeNull()
+    expect(localStorage.getItem("user")).toBeNull()
+  })
+
+  it("never writes the session token where page scripts can read it", () => {
+    startSession({ id: 2, name: "B", email: "b@acme.io", token: "secret-token" })
+    expect(JSON.stringify({ ...localStorage })).not.toContain("secret-token")
+    expect(JSON.parse(localStorage.getItem("user") ?? "{}")).toMatchObject({ id: 2, email: "b@acme.io" })
   })
 })

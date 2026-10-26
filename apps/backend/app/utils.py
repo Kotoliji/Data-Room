@@ -1,6 +1,6 @@
 from functools import wraps
 
-from flask import g, request, jsonify, current_app
+from flask import Response, g, request, jsonify, current_app
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from app import db
@@ -14,12 +14,37 @@ def generate_session_token(user_id: int, session_id: int) -> str:
     return serializer.dumps({"uid": user_id, "sid": session_id}, salt="session-auth")
 
 
+SESSION_COOKIE = "dr_session"
+CSRF_HEADER = "X-Requested-With"
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+def set_session_cookie(response: Response, token: str) -> Response:
+    """Browsers keep the session in an HttpOnly cookie that page scripts cannot read."""
+    response.set_cookie(SESSION_COOKIE, token, max_age=SESSION_TOKEN_MAX_AGE, httponly=True,
+                        secure=request.is_secure, samesite="Lax", path="/api")
+    return response
+
+
+def clear_session_cookie(response: Response) -> Response:
+    response.delete_cookie(SESSION_COOKIE, path="/api", samesite="Lax")
+    return response
+
+
 def get_user_from_header() -> User | None:
-    """Extract and validate user from Authorization Bearer token."""
+    """Resolve the user from a Bearer token (API clients) or the session cookie (browser)."""
     auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        return None
-    token = auth[7:]
+    if auth.startswith("Bearer "):
+        token = auth[7:]
+    else:
+        token = request.cookies.get(SESSION_COOKIE, "")
+        if not token:
+            return None
+        # Cookies ride along on cross-site requests; a custom header cannot be sent cross-site
+        # without passing CORS, so unsafe requests must carry it (SameSite=Lax is the first line)
+        if request.method not in SAFE_METHODS and request.headers.get(CSRF_HEADER) != "dataroom":
+            g.csrf_rejected = True
+            return None
     serializer = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
     try:
         data = serializer.loads(token, salt="session-auth", max_age=SESSION_TOKEN_MAX_AGE)
@@ -56,6 +81,8 @@ def require_auth(f):
     def decorated(*args, **kwargs):
         user = get_user_from_header()
         if not user:
+            if g.get("csrf_rejected"):
+                return jsonify({"data": None, "error": "Missing CSRF header"}), 403
             return jsonify({"data": None, "error": "Unauthorized"}), 401
         return f(user, *args, **kwargs)
     return decorated
