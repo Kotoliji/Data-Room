@@ -16,6 +16,12 @@ const card = "rounded-[14px] border border-[var(--dr-card-border)] p-4"
 const heading = "font-[Inter,sans-serif] text-[14px] font-semibold text-[var(--dr-main-title)]"
 const muted = "font-[Karla,sans-serif] text-[13px] text-[var(--dr-main-subtitle)]"
 
+/** "claude-haiku-5-5" -> "Claude Haiku 5.5" */
+function claudeName(model: string | null): string {
+  const [family, ...version] = (model ?? "").replace(/^claude-/, "").split("-")
+  return family ? `Claude ${family[0].toUpperCase()}${family.slice(1)} ${version.join(".")}`.trim() : "Claude"
+}
+
 function Coverage({ items }: { items: ChecklistItem[] }) {
   const counts = { covered: 0, partial: 0, missing: 0 }
   items.forEach((i) => { counts[i.status] += 1 })
@@ -122,8 +128,10 @@ export function DiligenceView() {
           <p className={`mt-1 ${muted} text-[14px]`}>
             Coverage against a standard M&A checklist ·{" "}
             {data.reviewed_at
-              ? `reviewed ${timeAgo(data.reviewed_at)} by ${data.source === "claude" ? "Claude" : "keyword matching"}`
-              : "keyword matching — run a review for a reasoned assessment"}
+              ? `reviewed ${timeAgo(data.reviewed_at)} by ${data.source === "claude" ? claudeName(data.ai_model) : "keyword matching"}`
+              : data.ai_enabled
+                ? `not reviewed yet — run a review with ${claudeName(data.ai_model)}`
+                : "keyword matching — run a review for a reasoned assessment"}
           </p>
         </div>
         <button

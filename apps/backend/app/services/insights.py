@@ -6,6 +6,7 @@ otherwise, so the feature works (less cleverly) in local dev, tests and demos.
 import json
 import re
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 
 import anthropic
@@ -110,8 +111,28 @@ def ai_enabled() -> bool:
     return bool(current_app.config.get("ANTHROPIC_API_KEY"))
 
 
+# Spend guard: a public demo must not turn into an open-ended bill, so after AI_DAILY_LIMIT
+# calls in a UTC day every feature quietly runs on heuristics until the next day.
+_calls = {"day": None, "count": 0}
+_calls_lock = threading.Lock()
+
+
+def _take_ai_call() -> bool:
+    today = datetime.now(timezone.utc).date()
+    with _calls_lock:
+        if _calls["day"] != today:
+            _calls.update(day=today, count=0)
+        if _calls["count"] >= current_app.config["AI_DAILY_LIMIT"]:
+            return False
+        _calls["count"] += 1
+        return True
+
+
 def _ask_claude(system: str, content: str, schema: dict, max_tokens: int) -> dict | None:
-    """One structured-output call; None on refusal or API failure so callers can fall back."""
+    """One structured-output call; None on refusal, API failure or spent daily budget so callers can fall back."""
+    if not _take_ai_call():
+        current_app.logger.warning("Daily AI call limit reached — using heuristics")
+        return None
     client = anthropic.Anthropic(api_key=current_app.config["ANTHROPIC_API_KEY"])
     model = current_app.config["ANTHROPIC_MODEL"]
     fallback = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"} if model in _FALLBACK_MODELS else {}

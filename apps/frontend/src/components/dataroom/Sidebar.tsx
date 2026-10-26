@@ -213,7 +213,7 @@ export function Sidebar({ isOpen, onClose, onFolderChange, activeFolder: activeF
       {/* Top: logo + menus + folders */}
       <div className="sidebar-scroll flex min-h-0 flex-1 flex-col overflow-y-auto">
         {/* Logo */}
-        <div className="px-6 py-10 3xl:px-4 3xl:py-6">
+        <div className="px-6 py-10 short:py-6 3xl:px-4 3xl:py-6">
           <span className="font-['Noto_Sans',sans-serif] text-[36px] font-bold text-[var(--dr-sidebar-title)] 3xl:text-[24px]">
             Acme Corp
           </span>
@@ -235,7 +235,7 @@ export function Sidebar({ isOpen, onClose, onFolderChange, activeFolder: activeF
                       : () => onTabChange?.(label)
                 }
                 className={cn(
-                  "flex w-full items-center gap-5 rounded-lg px-5 py-3 text-sm font-semibold leading-6 tracking-[-0.28px] 3xl:gap-3 3xl:px-3 3xl:py-2 3xl:text-xs",
+                  "flex w-full items-center gap-5 rounded-lg px-5 py-3 short:py-2 text-sm font-semibold leading-6 tracking-[-0.28px] 3xl:gap-3 3xl:px-3 3xl:py-2 3xl:text-xs",
                   isActive
                     ? "text-[var(--dr-sidebar-active-text)]"
                     : "text-[var(--dr-sidebar-text-inactive)] hover:text-[var(--dr-sidebar-text)]"
@@ -258,7 +258,7 @@ export function Sidebar({ isOpen, onClose, onFolderChange, activeFolder: activeF
 
         {/* Folders section */}
         <div className="flex flex-col p-4 3xl:p-2">
-          <label className="flex w-full cursor-text items-center rounded-lg border border-[var(--dr-sidebar-search-border)] px-5 py-3 text-sm font-semibold leading-6 tracking-[-0.28px] text-[var(--dr-sidebar-search-text)] transition-colors focus-within:border-[var(--dr-sidebar-text)] 3xl:px-3 3xl:py-2 3xl:text-xs">
+          <label className="flex w-full cursor-text items-center rounded-lg border border-[var(--dr-sidebar-search-border)] px-5 py-3 short:py-2 text-sm font-semibold leading-6 tracking-[-0.28px] text-[var(--dr-sidebar-search-text)] transition-colors focus-within:border-[var(--dr-sidebar-text)] 3xl:px-3 3xl:py-2 3xl:text-xs">
             <SearchIcon className="mr-5 size-[24px] shrink-0 pointer-events-none text-[#3FDD78] 3xl:mr-3 3xl:size-[18px]" />
             <input
               ref={searchRef}
@@ -284,7 +284,7 @@ export function Sidebar({ isOpen, onClose, onFolderChange, activeFolder: activeF
 
           <button
             onClick={() => setFoldersOpen(!foldersOpen)}
-            className="flex items-center gap-5 px-5 py-3 3xl:gap-3 3xl:px-3 3xl:py-2"
+            className="flex items-center gap-5 px-5 py-3 short:py-2 3xl:gap-3 3xl:px-3 3xl:py-2"
           >
             <ChevronDown
               size={24}
@@ -334,7 +334,7 @@ export function Sidebar({ isOpen, onClose, onFolderChange, activeFolder: activeF
                       }
                     }}
                     className={cn(
-                      "group relative flex w-full cursor-pointer items-center gap-5 rounded-lg px-5 py-3 text-sm font-semibold leading-6 tracking-[-0.28px] transition-all 3xl:gap-3 3xl:px-3 3xl:py-2 3xl:text-xs",
+                      "group relative flex w-full cursor-pointer items-center gap-5 rounded-lg px-5 py-3 short:py-2 text-sm font-semibold leading-6 tracking-[-0.28px] transition-all 3xl:gap-3 3xl:px-3 3xl:py-2 3xl:text-xs",
                       activeFolder === key
                         ? "text-[var(--dr-sidebar-active-text)]"
                         : "text-[var(--dr-sidebar-text-inactive)]",
@@ -431,7 +431,7 @@ export function Sidebar({ isOpen, onClose, onFolderChange, activeFolder: activeF
               })}
 
               {creatingFolder ? (
-                <div ref={createFolderRef} className="relative flex w-full items-center gap-3 rounded-lg px-5 py-3 3xl:gap-2 3xl:px-3 3xl:py-2">
+                <div ref={createFolderRef} className="relative flex w-full items-center gap-3 rounded-lg px-5 py-3 short:py-2 3xl:gap-2 3xl:px-3 3xl:py-2">
                   <div className="relative shrink-0">
                     <button
                       onClick={() => setColorPickerOpen(!colorPickerOpen)}
@@ -477,7 +477,7 @@ export function Sidebar({ isOpen, onClose, onFolderChange, activeFolder: activeF
               ) : (
                 <button
                   onClick={() => setCreatingFolder(true)}
-                  className="flex w-full items-center gap-5 rounded-lg px-5 py-3 text-sm font-medium leading-6 tracking-[-0.14px] text-[var(--dr-sidebar-text-inactive)] 3xl:gap-3 3xl:px-3 3xl:py-2 3xl:text-xs"
+                  className="flex w-full items-center gap-5 rounded-lg px-5 py-3 short:py-2 text-sm font-medium leading-6 tracking-[-0.14px] text-[var(--dr-sidebar-text-inactive)] 3xl:gap-3 3xl:px-3 3xl:py-2 3xl:text-xs"
                 >
                   <PlusCircle size={24} className="3xl:size-[18px]" />
                   New folder
@@ -489,7 +489,7 @@ export function Sidebar({ isOpen, onClose, onFolderChange, activeFolder: activeF
       </div>
 
       {/* Bottom section */}
-      <div className="isolate flex shrink-0 flex-col gap-3 px-4 py-6 3xl:px-2 3xl:py-4">
+      <div className="isolate flex shrink-0 flex-col gap-3 px-4 py-6 short:py-4 3xl:px-2 3xl:py-4">
         <UserCard onSettingsClick={() => setSettingsOpen(true)} />
 
         <ThemeToggle />

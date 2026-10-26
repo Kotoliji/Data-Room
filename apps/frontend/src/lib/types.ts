@@ -199,6 +199,7 @@ export interface ChecklistItem {
 
 export interface DiligenceOverview {
   ai_enabled: boolean
+  ai_model: string | null
   source: "claude" | "heuristic"
   reviewed_at: string | null
   checklist: ChecklistItem[]

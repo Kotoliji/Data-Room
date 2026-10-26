@@ -1,6 +1,6 @@
 import json
 
-from flask import Blueprint, Response, request, jsonify
+from flask import Blueprint, Response, current_app, request, jsonify
 
 from app import db, limiter
 from app.models import User, File, DocumentInsight, DiligenceReview
@@ -41,6 +41,7 @@ def _overview(user: User, files: list[File]) -> dict:
 
     return {
         "ai_enabled": ai_enabled(),
+        "ai_model": current_app.config["ANTHROPIC_MODEL"] if ai_enabled() else None,
         "source": review.source if review else "heuristic",
         "reviewed_at": review.created_at.isoformat() if review else None,
         "checklist": checklist,

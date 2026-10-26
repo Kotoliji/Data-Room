@@ -52,6 +52,7 @@ def create_app() -> Flask:
     app.config["GOOGLE_CLIENT_SECRET"] = os.environ.get("GOOGLE_CLIENT_SECRET", "")
     app.config["ANTHROPIC_API_KEY"] = os.environ.get("ANTHROPIC_API_KEY", "")
     app.config["ANTHROPIC_MODEL"] = os.environ.get("ANTHROPIC_MODEL") or "claude-haiku-5-5"
+    app.config["AI_DAILY_LIMIT"] = int(os.environ.get("AI_DAILY_LIMIT") or 200)
     app.config["INSIGHTS_ASYNC"] = os.environ.get("INSIGHTS_ASYNC", "1") != "0"
     app.config["DEMO_SEED"] = os.environ.get("DEMO_SEED") == "1"
 

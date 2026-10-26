@@ -2,7 +2,9 @@
 
 [![CI](https://github.com/Kotoliji/Data-Room/actions/workflows/ci.yml/badge.svg)](https://github.com/Kotoliji/Data-Room/actions/workflows/ci.yml)
 
-A virtual Data Room MVP for securely storing and managing due diligence documents. Users connect their Google Drive via OAuth, browse and import files, then view and manage them in an organized repository.
+A virtual data room for M&A due diligence. Sellers import documents from Google Drive or their computer, organize them in folders and share them with buyers through controlled links. Every view is tracked down to time per page, every shared PDF is watermarked with the viewer's email, and Claude classifies the documents, scores the room against a due-diligence checklist and drafts answers to buyer questions with verified citations.
+
+Stack: React 19 + TypeScript, Flask, SQLAlchemy (SQLite or Postgres), Claude API, Docker, GitHub Actions.
 
 | | |
 | --- | --- |
@@ -107,7 +109,7 @@ Open `http://localhost:5173` in your browser.
 ```bash
 cd apps/backend
 pip install -r requirements-dev.txt
-pytest -q          # 66 tests: auth (login, reset, sessions), files, folders/trash, sharing scope, Drive import (mocked), security, migrations
+pytest -q          # 72 tests: auth and sessions, files, folders/trash, sharing scope, analytics, Q&A, AI calls (mocked), Drive import (mocked), security, migrations
 ```
 
 ```bash
@@ -138,7 +140,7 @@ flask --app run.py db migrate -m "describe change"   # then review migrations/ve
 
 One Docker image serves the React build and the Flask API from the same origin (no CORS, one URL).
 
-**Render (free):** New → Blueprint → select this repo. `render.yaml` builds the root `Dockerfile`, generates `SECRET_KEY` and enables `DEMO_SEED`. Optionally add `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` and `ANTHROPIC_API_KEY`. The free tier has no persistent disk, which is why the demo seeds itself on every start.
+**Render (free):** New → Blueprint → select this repo. `render.yaml` builds the root `Dockerfile`, generates `SECRET_KEY` and enables `DEMO_SEED`. Optionally add `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` and `ANTHROPIC_API_KEY` (`ANTHROPIC_MODEL` and `AI_DAILY_LIMIT` tune the model and the daily call budget). The free tier has no persistent disk, which is why the demo seeds itself on every start.
 
 **Anywhere else:**
 
@@ -199,7 +201,7 @@ BACKEND_URL=http://localhost:5000
 | Requirement          | Status | Implementation                                                                         |
 | -------------------- | ------ | -------------------------------------------------------------------------------------- |
 | Authentication layer | Done   | Email/password registration + Google Sign-In. Session management with device tracking. |
-| Search and filtering | Done   | Real-time search by file name within the current folder.                               |
+| Search and filtering | Done   | Real-time search by file name, plus full-text search inside documents.                 |
 
 ### Beyond Requirements
 
@@ -222,7 +224,7 @@ BACKEND_URL=http://localhost:5000
 
 ### Database: SQLite locally, Postgres in CI and Compose
 
-SQLite was chosen for zero-setup local development — it ships with Python and needs no external server. All database access goes through SQLAlchemy ORM, so migrating to Postgres for production requires only changing the connection string. For an MVP handling single-user workflows, SQLite is more than sufficient.
+SQLite keeps local development zero-setup: it ships with Python and needs no server. All access goes through the SQLAlchemy ORM, so Postgres is a connection-string change, and that is not just a claim: CI runs the whole backend suite on both, and `docker compose up` starts the app on Postgres 16.
 
 ### File Storage: Local Disk
 
@@ -237,8 +239,8 @@ Tokens are encrypted at rest with Fernet (AES-128 + HMAC); the key is derived fr
 ### Hardening
 
 - **Safe file viewing** — the MIME type is derived on the server from the file extension, never from the client's `Content-Type`. Only passive formats (PDF, images, plain text) render inline; HTML, SVG and everything else are forced to download, with `nosniff` and a sandboxing CSP, so an uploaded file can never run scripts on the app's origin.
-- **Rate limiting** — login, registration, password reset and Google code exchange are throttled per client IP (Flask-Limiter), with a JSON `429` response.
-- **Proxy-aware client IP** — `ProxyFix` trusts exactly one proxy hop, so the IP shown in active sessions cannot be spoofed with a forged `X-Forwarded-For` header.
+- **Rate limiting** — login, registration, password reset, Google code exchange, share unlocks, viewer questions and AI reviews are throttled per client IP (Flask-Limiter), with a JSON `429` response.
+- **Proxy-aware client IP** — `ProxyFix` trusts exactly the number of proxy hops in front of the app (`PROXY_HOPS`: 1 by default, 3 on Render), so the IP shown in sessions and access logs cannot be spoofed with a forged `X-Forwarded-For` header.
 
 Signed tokens (via `itsdangerous`) are used for OAuth state parameters and Google login callbacks, preventing CSRF and state tampering attacks.
 
@@ -304,6 +306,7 @@ Implementation notes:
 - On models that support it (Opus, Sonnet, Fable), the server-side refusal fallback is enabled (`fallbacks: "default"`). Haiku has none, so a refusal there goes straight to the heuristics.
 - Refusals, `max_tokens` and API errors (rate limits, 5xx, network) are handled explicitly. Each one degrades to the heuristic path instead of failing the upload.
 - Classification sends only the first 15k characters of a document: the opening pages identify it, and cost per file stays bounded. The full text is still stored for search.
+- **Spend guard.** After `AI_DAILY_LIMIT` calls in a UTC day (200 by default) every AI feature quietly switches to the heuristics until the next day, so a public demo cannot turn into an open-ended bill.
 - **Without `ANTHROPIC_API_KEY`** the same features run on keyword and regex heuristics, labelled as such in the UI. Tests and local development never call the API.
 
 ### Buyer–Seller Q&A
@@ -336,16 +339,18 @@ Capped at 100 entries per user — the oldest entry is automatically pruned when
 ## Architecture
 
 ```
-┌─────────────┐         ┌──────────────┐         ┌──────────────┐
-│   Browser   │  REST   │    Flask     │  OAuth   │  Google API  │
-│  React SPA  │◄──────► │   Backend    │◄────────►│  Drive API   │
-│  :5173      │  JSON   │   :5000      │  Token   │              │
-└─────────────┘         └──────┬───────┘         └──────────────┘
-                               │
-                        ┌──────┴───────┐
-                        │   SQLite     │
-                        │  + Disk FS   │
-                        └──────────────┘
+┌─────────────┐         ┌──────────────┐  OAuth   ┌──────────────┐
+│   Browser   │  REST   │    Flask     │◄────────►│ Google Drive │
+│  React SPA  │◄──────► │   Backend    │          └──────────────┘
+│  (Vite)     │  JSON   │  (gunicorn)  │  HTTPS   ┌──────────────┐
+└─────────────┘         └──────┬───────┘◄────────►│  Claude API  │
+                               │                  └──────────────┘
+                     ┌─────────┴─────────┐
+                     │ SQLite / Postgres │
+                     │   + file storage  │
+                     └───────────────────┘
+
+In production one Docker image serves the built SPA and the API from the same origin.
 ```
 
 ### Frontend (`apps/frontend/`)
@@ -362,7 +367,7 @@ Capped at 100 entries per user — the oldest entry is automatically pruned when
 ### Backend (`apps/backend/`)
 
 - **Flask 3.1** with Blueprints for modular routing
-- **SQLAlchemy** ORM with models: `User`, `Session`, `File`, `Folder`, `ActivityLog`
+- **SQLAlchemy** ORM, schema managed by Alembic; models listed in [Data Models](#data-models)
 - **Services layer** separating business logic from routes
 - Consistent API response format: `{ "data": ..., "error": null }`
 
@@ -377,6 +382,8 @@ Capped at 100 entries per user — the oldest entry is automatically pruned when
 | `POST` | `/api/v1/auth/register`     | Register with email/password |
 | `POST` | `/api/v1/auth/login`        | Login with email/password    |
 | `GET`  | `/api/v1/auth/google/login` | Start Google Sign-In flow    |
+| `POST` | `/api/v1/auth/logout`       | End the current session      |
+| `GET`  | `/api/v1/auth/config`       | Google sign-in / demo flags  |
 | `GET`  | `/api/v1/auth/me`           | Get current user profile     |
 | `PUT`  | `/api/v1/auth/profile`      | Update profile               |
 | `GET`  | `/api/v1/auth/sessions`     | List active sessions         |

@@ -122,3 +122,19 @@ def test_refusal_and_api_errors_fall_back_to_heuristics(app, monkeypatch):
         overloaded = anthropic.InternalServerError("overloaded", response=httpx2.Response(529, request=request), body=None)
         fake_client(monkeypatch, error=overloaded)
         assert insights.claude_insight("x.pdf", "text") is None
+
+
+def test_daily_call_limit_switches_to_heuristics(app, monkeypatch):
+    payload = {"category": "Legal", "summary": "Settlement agreement", "sensitive": []}
+    captured = fake_client(monkeypatch, response=SimpleNamespace(stop_reason="end_turn", content=[
+        SimpleNamespace(type="text", text=json.dumps(payload)),
+    ]))
+    monkeypatch.setattr(insights, "_calls", {"day": None, "count": 0})
+    with app.app_context():
+        app.config["ANTHROPIC_API_KEY"] = "k"
+        app.config["AI_DAILY_LIMIT"] = 2
+        assert insights.claude_insight("a.pdf", "text") == payload
+        assert insights.claude_insight("b.pdf", "text") == payload
+        captured.clear()
+        assert insights.claude_insight("c.pdf", "text") is None  # budget spent: no API call made
+    assert captured == {}

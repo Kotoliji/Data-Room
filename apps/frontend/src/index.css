@@ -9,6 +9,7 @@
 }
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant short (@media (max-height: 900px));
 
 :root {
     --background: oklch(1 0 0);
@@ -194,6 +195,8 @@
 .sidebar-scroll {
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
+  /* fade the bottom edge so a cut-off folder list reads as scrollable */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent);
 }
 .sidebar-scroll:hover {
   scrollbar-color: rgba(255,255,255,0.15) transparent;
