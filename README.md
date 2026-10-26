@@ -300,8 +300,8 @@ AI here does data-room-specific work, not generic "chat with your documents":
 
 Implementation notes:
 
-- Claude Opus 5.5 with structured outputs (`output_config.format` JSON schema). Classification is a simple task, so it runs at `effort: "low"`.
-- Server-side refusal fallback is enabled (`fallbacks: "default"`).
+- Claude with structured outputs (`output_config.format` JSON schema). The model is set by `ANTHROPIC_MODEL` and defaults to Claude Haiku 5.5: classification is a simple task, so a small model at `effort: "low"` is enough and costs a fraction of a cent per document.
+- On models that support it (Opus, Sonnet, Fable), the server-side refusal fallback is enabled (`fallbacks: "default"`). Haiku has none, so a refusal there goes straight to the heuristics.
 - Refusals, `max_tokens` and API errors (rate limits, 5xx, network) are handled explicitly. Each one degrades to the heuristic path instead of failing the upload.
 - Classification sends only the first 15k characters of a document: the opening pages identify it, and cost per file stays bounded. The full text is still stored for search.
 - **Without `ANTHROPIC_API_KEY`** the same features run on keyword and regex heuristics, labelled as such in the UI. Tests and local development never call the API.

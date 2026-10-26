@@ -15,7 +15,8 @@ from app import db
 from app.models import DocumentInsight, File
 from app.services.text_extract import extract_text
 
-MODEL = "claude-opus-5-5"
+# Models that accept the server-side refusal fallback; Haiku has none, so it is sent only to these
+_FALLBACK_MODELS = {"claude-fable-5-1", "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5"}
 CLASSIFY_CHARS = 15_000  # the opening pages identify a document; full text stays searchable
 
 CATEGORIES = ["Corporate", "Financial", "Tax", "Legal", "Commercial", "HR", "IP & Technology", "Real Estate", "Compliance", "Other"]
@@ -112,12 +113,13 @@ def ai_enabled() -> bool:
 def _ask_claude(system: str, content: str, schema: dict, max_tokens: int) -> dict | None:
     """One structured-output call; None on refusal or API failure so callers can fall back."""
     client = anthropic.Anthropic(api_key=current_app.config["ANTHROPIC_API_KEY"])
+    model = current_app.config["ANTHROPIC_MODEL"]
+    fallback = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"} if model in _FALLBACK_MODELS else {}
     try:
         response = client.beta.messages.create(
-            model=MODEL,
+            model=model,
             max_tokens=max_tokens,
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
+            **fallback,
             output_config={"effort": "low", "format": {"type": "json_schema", "schema": schema}},
             system=system,
             messages=[{"role": "user", "content": content}],

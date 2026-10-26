@@ -96,8 +96,20 @@ def test_claude_insight_request_shape_and_parsing(app, monkeypatch):
     with app.app_context():
         app.config["ANTHROPIC_API_KEY"] = "k"
         assert insights.claude_insight("settlement.pdf", "text") == payload
-    assert captured["model"] == "claude-opus-5-5" and captured["fallbacks"] == "default"
+    assert captured["model"] == "claude-haiku-5-5" and "fallbacks" not in captured  # Haiku has no fallback
     assert captured["output_config"]["format"]["type"] == "json_schema"
+
+
+def test_model_is_configurable_and_fallback_follows_it(app, monkeypatch):
+    payload = {"category": "Legal", "summary": "Settlement agreement", "sensitive": []}
+    captured = fake_client(monkeypatch, response=SimpleNamespace(stop_reason="end_turn", content=[
+        SimpleNamespace(type="text", text=json.dumps(payload)),
+    ]))
+    with app.app_context():
+        app.config["ANTHROPIC_API_KEY"] = "k"
+        app.config["ANTHROPIC_MODEL"] = "claude-opus-5-5"
+        insights.claude_insight("settlement.pdf", "text")
+    assert captured["model"] == "claude-opus-5-5" and captured["fallbacks"] == "default"
 
 
 def test_refusal_and_api_errors_fall_back_to_heuristics(app, monkeypatch):
