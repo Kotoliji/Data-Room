@@ -92,7 +92,12 @@ pip install -r requirements-dev.txt
 pytest -q          # 66 tests: auth (login, reset, sessions), files, folders/trash, sharing scope, Drive import (mocked), security, migrations
 ```
 
-GitHub Actions runs backend tests plus frontend lint and build on every push and pull request.
+```bash
+cd apps/frontend
+npm test           # Vitest + Testing Library: API client, auth flow, protected routes, share gate
+```
+
+GitHub Actions runs backend and frontend tests, lint, the production build and the Docker image build on every push and pull request.
 
 ### Database migrations
 
