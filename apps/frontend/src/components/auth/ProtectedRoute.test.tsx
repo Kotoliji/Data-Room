@@ -26,4 +26,17 @@ describe("ProtectedRoute", () => {
     renderAt("/")
     expect(screen.getByText("Data room")).toBeInTheDocument()
   })
+
+  it("shows the fallback instead of redirecting when one is given", () => {
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <Routes>
+          <Route path="/" element={<ProtectedRoute fallback={<p>Landing</p>}><p>Data room</p></ProtectedRoute>} />
+          <Route path="/login" element={<p>Sign in page</p>} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    expect(screen.getByText("Landing")).toBeInTheDocument()
+    expect(screen.queryByText("Sign in page")).not.toBeInTheDocument()
+  })
 })

@@ -6,6 +6,7 @@ import { ResetPassword } from '@/components/auth/ResetPassword'
 import { NewPassword } from '@/components/auth/NewPassword'
 import { ThemeProvider } from '@/lib/theme'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
+import { Landing } from '@/components/landing/Landing'
 import { PublicShare } from '@/components/share/PublicShare'
 
 function App() {
@@ -13,7 +14,7 @@ function App() {
     <ThemeProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute fallback={<Landing />}><Layout /></ProtectedRoute>} />
           <Route path="/login" element={<SignIn />} />
           <Route path="/register" element={<CreateAccount />} />
           <Route path="/forgot-password" element={<ResetPassword />} />

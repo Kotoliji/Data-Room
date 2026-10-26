@@ -1,0 +1,180 @@
+/* Landing page scene: a 3D desk of folders that documents fly into, then fan out of on hover. */
+
+.lp-scene {
+  perspective: 1600px;
+}
+
+.lp-desk {
+  display: grid;
+  grid-template-columns: repeat(2, 220px);
+  gap: 96px 40px;
+  padding-top: 110px;
+  transform-style: preserve-3d;
+  /* --tx / --ty (-1..1) come from the pointer via useTilt */
+  transform: rotateX(calc(12deg + var(--ty, 0) * -7deg)) rotateY(calc(-14deg + var(--tx, 0) * 12deg));
+}
+
+.lp-folder {
+  position: relative;
+  width: 220px;
+  height: 150px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  animation: lp-rise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  animation-delay: var(--d);
+}
+
+.lp-folder:focus-visible {
+  outline: 2px solid #3e90f0;
+  outline-offset: 6px;
+  border-radius: 14px;
+}
+
+.lp-folder-back {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px 14px 14px 14px;
+  background: color-mix(in srgb, var(--c) 45%, #0b0c0d);
+}
+
+.lp-folder-back::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -14px;
+  width: 86px;
+  height: 16px;
+  border-radius: 10px 10px 0 0;
+  background: inherit;
+}
+
+.lp-folder-front {
+  position: absolute;
+  inset: 36px 0 0 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 14px 16px;
+  border-radius: 10px 10px 14px 14px;
+  background: linear-gradient(160deg, var(--c), color-mix(in srgb, var(--c) 60%, #000));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25), 0 18px 40px -12px rgb(0 0 0 / 0.6);
+  text-align: left;
+  transform-origin: bottom;
+  transform: translateZ(2px);
+  transition: transform 0.5s cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+
+.lp-folder[aria-expanded="true"] .lp-folder-front {
+  transform: translateZ(2px) rotateX(-26deg);
+}
+
+.lp-doc {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  width: 132px;
+  height: 152px;
+  margin-left: -66px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #fbfbfc;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.35);
+  text-align: left;
+  /* --i is -1, 0 or 1: the document's place in the fan */
+  transform: translate3d(calc(var(--i) * 7px), calc(var(--i) * var(--i) * 6px), 0) rotate(calc(var(--i) * 2deg));
+  transition: transform 0.6s cubic-bezier(0.2, 0.9, 0.25, 1.15);
+  transition-delay: calc((var(--i) + 1) * 40ms);
+  animation: lp-fly 1.15s cubic-bezier(0.16, 0.84, 0.3, 1) backwards;
+  animation-delay: var(--d);
+}
+
+.lp-folder[aria-expanded="true"] .lp-doc {
+  transform: translate3d(calc(var(--i) * 70px), calc(-112px + var(--i) * var(--i) * 14px), 40px) rotate(calc(var(--i) * 12deg));
+}
+
+.lp-chip {
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.3s, transform 0.4s cubic-bezier(0.2, 0.9, 0.25, 1.4);
+  transition-delay: var(--cd, 0ms);
+}
+
+.lp-desk[data-classified="true"] .lp-chip {
+  opacity: 1;
+  transform: none;
+}
+
+/* "Claude is reading" sweep across the desk */
+.lp-scan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgb(62 144 240 / 0.18) 45%, rgb(142 85 234 / 0.35) 50%, rgb(62 144 240 / 0.18) 55%, transparent);
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  opacity: 0;
+  animation: lp-scan 1.4s ease-in-out 1.9s;
+}
+
+@keyframes lp-fly {
+  from {
+    transform: translate3d(var(--fx), var(--fy), 260px) rotate(var(--fr));
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+@keyframes lp-rise {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}
+
+@keyframes lp-scan {
+  0% {
+    opacity: 1;
+    background-position: -60% 0;
+  }
+  100% {
+    opacity: 1;
+    background-position: 160% 0;
+  }
+}
+
+/* Analytics card: page heatmap bars grow once the card scrolls into view */
+.lp-bar {
+  transform-origin: bottom;
+  transform: scaleY(0.08);
+  transition: transform 0.9s cubic-bezier(0.2, 0.9, 0.25, 1);
+  transition-delay: calc(var(--n) * 70ms);
+}
+
+[data-inview="true"] .lp-bar {
+  transform: scaleY(var(--v));
+}
+
+@media (max-width: 640px) {
+  .lp-scene {
+    zoom: 0.62;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-folder,
+  .lp-doc,
+  .lp-scan {
+    animation: none !important;
+  }
+  .lp-doc,
+  .lp-folder-front,
+  .lp-chip,
+  .lp-bar {
+    transition-duration: 0.01s !important;
+  }
+}

@@ -12,8 +12,8 @@ Stack: React 19 + TypeScript, Flask, SQLAlchemy (SQLite or Postgres), Claude API
 | **Data Room** — folders, AI category badges, content search | **Viewer analytics** — who read what, time per page, 14-day activity |
 | ![Due diligence](docs/screenshots/04-diligence.png) | ![Investor view](docs/screenshots/06-investor-viewer.png) |
 | **Due diligence** — checklist coverage, sensitive documents | **Investor view** — in-app PDF viewer, email watermark on every page |
-| ![Q&A](docs/screenshots/05-qa-draft.png) | ![Sign in](docs/screenshots/01-sign-in.png) |
-| **Buyer Q&A** — answer drafts with verified citations | **One-click demo** sign-in |
+| ![Q&A](docs/screenshots/05-qa-draft.png) | ![Landing](docs/screenshots/01-landing.png) |
+| **Buyer Q&A** — answer drafts with verified citations | **Landing** — interactive intro scene, one-click demo |
 
 ---
 
@@ -32,7 +32,7 @@ It contains four folders of sample M&A documents (already classified, one flagge
 
 ### Step-by-step
 
-1. Click **Try the demo account** on the sign-in page (or use the login above) — browse folders, open a PDF in the built-in viewer
+1. Click **Try the live demo** on the landing page (or sign in with the login above) — browse folders, open a PDF in the built-in viewer
 2. **Sharing** tab → expand "Project Falcon" → Analytics: engaged viewers, time per page
 3. **Q&A** tab → open question → **Draft with AI** → send the answer
 4. **Diligence** tab → checklist coverage and the sensitive-documents list
@@ -114,7 +114,7 @@ pytest -q          # 72 tests: auth and sessions, files, folders/trash, sharing 
 
 ```bash
 cd apps/frontend
-npm test           # Vitest + Testing Library: API client, auth flow, protected routes, share gate
+npm test           # Vitest + Testing Library: API client, auth flow, protected routes, landing, share gate
 ```
 
 GitHub Actions runs on every push and pull request:
@@ -363,6 +363,7 @@ In production one Docker image serves the built SPA and the API from the same or
 - **TanStack Query** owns server state: one cache for files, folders, shares, analytics, diligence and Q&A. Background polling runs only while documents are being classified, content search is debounced, and the cache is cleared on every sign-in and sign-out so accounts never see each other's data
 - **Vitest + Testing Library** — API client, auth flow, protected routes, the investor share page and the main Data Room screen
 - Shared `types.ts` for all TypeScript interfaces
+- **Landing page** without a 3D library: the folder scene is CSS 3D transforms. Pointer tilt and the drifting background icons run in `requestAnimationFrame` loops that write straight to element styles through refs, so moving the mouse never re-renders React. Everything respects `prefers-reduced-motion`
 
 ### Backend (`apps/backend/`)
 
