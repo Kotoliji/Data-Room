@@ -1,16 +1,18 @@
-import { Check, Trash2, X, Pencil, Eye, Folder, ChevronRight, ChevronLeft, FolderPlus, RotateCcw, Share2 } from "lucide-react"
-import { useState, useRef, useCallback } from "react"
+import { Check, X, Folder, ChevronLeft, FolderPlus, Share2 } from "lucide-react"
+import { useState } from "react"
 import type { UploadedFile, FolderItem } from "@/lib/types"
 import { getFileViewUrl } from "@/lib/api"
 import { LazyPdfViewer as PdfViewer } from "@/components/viewer/LazyPdfViewer"
-import { InsightBadges } from "./InsightBadges"
-import { formatSize } from "@/lib/utils"
+import { FileRow, type ListedFile } from "./file-list/FileRow"
+import { ConfirmDeleteModal } from "./file-list/ConfirmDeleteModal"
+import { SubfolderRow } from "./file-list/SubfolderRow"
+import { Breadcrumb } from "./file-list/Breadcrumb"
 import { DeleteFolderModal } from "./DeleteFolderModal"
 import { triggerTrashAnimation } from "./TrashAnimation"
 
 interface FileListViewProps {
   folderName: string
-  files: (UploadedFile | { id: string; original_name: string; size: number; status: "uploading" })[]
+  files: ListedFile[]
   onImport: () => void
   onShare?: () => void
   onDeleteFile: (fileId: number) => void
@@ -28,277 +30,6 @@ interface FileListViewProps {
   currentFolderId?: string
   /** Content-search snippets keyed by file id */
   snippets?: Record<number, string>
-}
-
-function LoadingDots() {
-  return (
-    <div className="flex items-center gap-[6px] px-4">
-      <span className="size-[8px] animate-[pulse-dot_1.4s_ease-in-out_infinite] rounded-full bg-[#6c7275]" />
-      <span className="size-[10px] animate-[pulse-dot_1.4s_ease-in-out_0.2s_infinite] rounded-full bg-[#141718]" />
-      <span className="size-[8px] animate-[pulse-dot_1.4s_ease-in-out_0.4s_infinite] rounded-full bg-[#6c7275]" />
-    </div>
-  )
-}
-
-function getExt(name: string): string {
-  const d = name.lastIndexOf(".")
-  return d > 0 ? name.slice(d) : ""
-}
-
-function stripExt(name: string): string {
-  const d = name.lastIndexOf(".")
-  return d > 0 ? name.slice(0, d) : name
-}
-
-function RenameForm({ value, ext, onChange, onSubmit, onCancel }: {
-  value: string; ext: string
-  onChange: (v: string) => void
-  onSubmit: (name: string, ext: string) => void
-  onCancel: () => void
-}) {
-  return (
-    <form
-      className="flex flex-1 items-center gap-2"
-      onSubmit={(e) => { e.preventDefault(); if (value.trim()) onSubmit(value.trim(), ext) }}
-    >
-      <input
-        autoFocus
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Escape") onCancel() }}
-        className="flex-1 rounded-lg border border-[#2752f4] bg-transparent px-2 py-1 font-[Inter,sans-serif] text-[14px] font-semibold text-[var(--dr-main-title)] outline-none"
-      />
-      {ext && <span className="shrink-0 text-[14px] font-semibold text-[#6c7275]">{ext}</span>}
-      <button type="submit" className="rounded-md p-1 text-[#2752f4] hover:bg-[#f3f5f7]">
-        <Check className="size-[18px]" />
-      </button>
-      <button type="button" onClick={onCancel} className="rounded-md p-1 text-[#6c7275] hover:bg-[#f3f5f7]">
-        <X className="size-[18px]" />
-      </button>
-    </form>
-  )
-}
-
-function ConfirmDeleteModal({ fileName, permanent, onConfirm, onCancel }: { fileName: string; permanent: boolean; onConfirm: () => void; onCancel: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(20,23,24,0.75)]" onClick={onCancel}>
-      <div
-        className="relative mx-4 flex w-full max-w-[420px] flex-col gap-[24px] rounded-[24px] bg-[#fefefe] p-[24px] font-[Inter,sans-serif] md:p-[32px]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button onClick={onCancel} className="absolute right-[16px] top-[16px] rounded-full bg-[#f3f5f7] p-[6px]">
-          <X size={18} className="text-[#141718]" />
-        </button>
-
-        <div className="flex flex-col gap-[8px]">
-          <h3 className="text-[18px] font-bold leading-[28px] text-[#141718]">
-            {permanent ? "Delete permanently?" : "Move to Trash?"}
-          </h3>
-          <p className="text-[14px] leading-[20px] text-[#6c7275]">
-            <span className="font-semibold text-[#141718]">{fileName}</span>
-            {permanent
-              ? " will be permanently deleted. This action cannot be undone."
-              : " will be moved to Trash. You can restore it later."}
-          </p>
-        </div>
-
-        <div className="flex justify-end gap-[12px]">
-          <button
-            onClick={onCancel}
-            className="rounded-[12px] border-2 border-[#e8ecef] px-[20px] py-[10px] text-[14px] font-semibold text-[#141718] transition-colors hover:bg-[#f3f5f7]"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="rounded-[12px] bg-red-500 px-[20px] py-[10px] text-[14px] font-semibold text-white transition-colors hover:bg-red-600"
-          >
-            {permanent ? "Delete" : "Move to Trash"}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function SubfolderRow({ folder, onNavigate, onDelete, onRestore, onRename, onDrop, dragOverId, setDragOverId }: {
-  folder: FolderItem
-  onNavigate: (id: string) => void
-  onDelete?: (id: number) => void
-  onRestore?: (id: number) => void
-  onRename?: (id: number, name: string) => void
-  onDrop?: (fileId: number, folderId: string) => void
-  dragOverId: number | null
-  setDragOverId: (id: number | null) => void
-}) {
-  const [renaming, setRenaming] = useState(false)
-  const [renamingValue, setRenamingValue] = useState(folder.name)
-  const isDragOver = dragOverId === folder.id
-  const dragTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
-
-  const clearDragTimer = useCallback(() => {
-    if (dragTimerRef.current) { clearTimeout(dragTimerRef.current); dragTimerRef.current = null }
-  }, [])
-
-  return (
-    <div
-      data-folder-id={folder.id}
-      className={`flex cursor-pointer items-center border-t border-[rgba(108,114,117,0.15)] py-[14px] transition-colors md:py-[20px] ${isDragOver ? "bg-[var(--dr-card-border)]/40" : "hover:bg-[var(--dr-card-border)]/20"}`}
-      onClick={() => onNavigate(`folder:${folder.id}`)}
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData("application/x-folder-id", String(folder.id))
-        e.dataTransfer.effectAllowed = "move"
-      }}
-      onDragOver={(e) => {
-        e.preventDefault()
-        e.stopPropagation()
-        e.dataTransfer.dropEffect = "move"
-        setDragOverId(folder.id)
-        // Auto-open folder after 800ms hover
-        if (!dragTimerRef.current) {
-          dragTimerRef.current = setTimeout(() => {
-            onNavigate(`folder:${folder.id}`)
-            dragTimerRef.current = null
-          }, 800)
-        }
-      }}
-      onDragLeave={(e) => {
-        e.stopPropagation()
-        setDragOverId(null)
-        clearDragTimer()
-      }}
-      onDrop={(e) => {
-        e.preventDefault()
-        e.stopPropagation()
-        setDragOverId(null)
-        clearDragTimer()
-        const fileId = e.dataTransfer.getData("application/x-file-id")
-        if (fileId && onDrop) {
-          onDrop(Number(fileId), `folder:${folder.id}`)
-        }
-      }}
-    >
-      <Folder className="mr-3 size-[20px] shrink-0" style={{ color: folder.color || "#3e90f0" }} />
-      {renaming ? (
-        <form
-          className="flex flex-1 items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (renamingValue.trim()) {
-              onRename?.(folder.id, renamingValue.trim())
-              setRenaming(false)
-            }
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <input
-            autoFocus
-            value={renamingValue}
-            onChange={(e) => setRenamingValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Escape") setRenaming(false) }}
-            className="flex-1 rounded-lg border border-[#2752f4] bg-transparent px-2 py-1 font-[Inter,sans-serif] text-[14px] font-semibold text-[var(--dr-main-title)] outline-none"
-          />
-          <button type="submit" className="rounded-md p-1 text-[#2752f4] hover:bg-[var(--dr-card-border)]/30">
-            <Check className="size-[18px]" />
-          </button>
-          <button type="button" onClick={() => setRenaming(false)} className="rounded-md p-1 text-[#6c7275] hover:bg-[var(--dr-card-border)]/30">
-            <X className="size-[18px]" />
-          </button>
-        </form>
-      ) : (
-        <span className="flex-1 truncate font-[Inter,sans-serif] text-[14px] font-semibold leading-[24px] tracking-[-0.28px] text-[var(--dr-main-title)]">
-          {folder.name}
-        </span>
-      )}
-      {!renaming && onRename && (
-        <button
-          onClick={(e) => { e.stopPropagation(); setRenamingValue(folder.name); setRenaming(true) }}
-          className="ml-1 shrink-0 rounded-md p-1 text-[#6c7275] transition-colors hover:bg-[var(--dr-card-border)]/30 hover:text-[var(--dr-main-title)]"
-          title="Rename folder"
-        >
-          <Pencil className="size-[18px]" />
-        </button>
-      )}
-      {!renaming && onRestore && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onRestore(folder.id) }}
-          className="ml-1 shrink-0 rounded-md p-1 text-[#6c7275] transition-colors hover:bg-[var(--dr-card-border)]/30 hover:text-green-500"
-          title="Restore folder"
-        >
-          <RotateCcw className="size-[18px]" />
-        </button>
-      )}
-      {!renaming && onDelete && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onDelete(folder.id) }}
-          className="ml-1 shrink-0 rounded-md p-1 text-[#6c7275] transition-colors hover:bg-[var(--dr-card-border)]/30 hover:text-red-500"
-          title="Delete folder"
-        >
-          <Trash2 className="size-[18px]" />
-        </button>
-      )}
-      {!renaming && <ChevronRight className="ml-1 size-[18px] shrink-0 text-[#6c7275]" />}
-    </div>
-  )
-}
-
-function BreadcrumbSegment({ label, targetId, onNavigate }: {
-  label: string
-  targetId: string
-  onNavigate: (folderId: string) => void
-}) {
-  const timerRef = useRef<ReturnType<typeof setTimeout>>(null)
-  const [dragOver, setDragOver] = useState(false)
-
-  return (
-    <button
-      onClick={() => onNavigate(targetId)}
-      onDragOver={(e) => {
-        if (e.dataTransfer.types.includes("application/x-file-id") || e.dataTransfer.types.includes("application/x-folder-id")) {
-          e.preventDefault()
-          e.stopPropagation()
-          setDragOver(true)
-          if (!timerRef.current) {
-            timerRef.current = setTimeout(() => {
-              onNavigate(targetId)
-              timerRef.current = null
-            }, 800)
-          }
-        }
-      }}
-      onDragLeave={() => {
-        setDragOver(false)
-        if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
-      }}
-      onDrop={(e) => {
-        e.preventDefault()
-        setDragOver(false)
-        if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
-      }}
-      className={`rounded px-1 transition-colors hover:text-[var(--dr-main-title)] hover:underline ${dragOver ? "bg-[var(--dr-card-border)]/40 text-[var(--dr-main-title)]" : ""}`}
-    >
-      {label}
-    </button>
-  )
-}
-
-function Breadcrumb({ folderName, path, onNavigate }: {
-  folderName: string
-  path: FolderItem[]
-  onNavigate: (folderId: string) => void
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-1 font-[Inter,sans-serif] text-[13px] text-[#6c7275]">
-      <BreadcrumbSegment label={folderName} targetId="root" onNavigate={onNavigate} />
-      {path.map((segment) => (
-        <span key={segment.id} className="flex items-center gap-1">
-          <ChevronRight className="size-[14px]" />
-          <BreadcrumbSegment label={segment.name} targetId={`folder:${segment.id}`} onNavigate={onNavigate} />
-        </span>
-      ))}
-    </div>
-  )
 }
 
 export function FileListView({
@@ -481,70 +212,18 @@ export function FileListView({
         )}
 
         {files.map((file) => (
-          <div
+          <FileRow
             key={file.id}
-            data-file-id={file.id}
-            draggable={file.status !== "uploading"}
-            onDragStart={(e) => {
-              if (file.status === "uploading") return
-              e.dataTransfer.setData("application/x-file-id", String(file.id))
-              e.dataTransfer.setData("text/plain", file.original_name)
-              e.dataTransfer.effectAllowed = "move"
-            }}
-            className="flex cursor-grab items-center border-t border-[rgba(108,114,117,0.15)] py-[14px] md:py-[20px] active:cursor-grabbing"
-          >
-            {renameTarget?.id === file.id ? (
-              <RenameForm
-                value={renameValue}
-                ext={getExt(renameTarget.name)}
-                onChange={setRenameValue}
-                onSubmit={(name, ext) => { onRenameFile?.(renameTarget.id, name + ext); setRenameTarget(null) }}
-                onCancel={() => setRenameTarget(null)}
-              />
-            ) : (
-              <span
-                className="flex-1 cursor-pointer truncate font-[Inter,sans-serif] text-[14px] font-semibold leading-[24px] tracking-[-0.28px] text-[var(--dr-main-title)] hover:underline"
-                onClick={() => { if (file.status !== "uploading") openFile(file as UploadedFile) }}
-              >
-                {file.original_name}
-              </span>
-            )}
-            {renameTarget?.id !== file.id && file.status !== "uploading" && (
-              <InsightBadges insight={(file as UploadedFile).insight} snippet={snippets[file.id as number]} />
-            )}
-
-            {file.status === "uploading" ? (
-              <LoadingDots />
-            ) : renameTarget?.id !== file.id ? (
-              <>
-                <span className="mx-4 hidden shrink-0 text-[12px] text-[#6c7275] md:block">
-                  {formatSize(file.size)}
-                </span>
-                <button
-                  onClick={() => openFile(file as UploadedFile)}
-                  className="hidden shrink-0 rounded-md p-1 text-[#6c7275] transition-colors hover:bg-[#f3f5f7] hover:text-[#2752f4] md:block"
-                  title="View file"
-                >
-                  <Eye className="size-[18px]" />
-                </button>
-                <button
-                  onClick={() => { setRenameTarget({ id: file.id as number, name: file.original_name }); setRenameValue(stripExt(file.original_name)) }}
-                  className="ml-1 hidden shrink-0 rounded-md p-1 text-[#6c7275] transition-colors hover:bg-[#f3f5f7] hover:text-[#141718] md:block"
-                  title="Rename"
-                >
-                  <Pencil className="size-[18px]" />
-                </button>
-                <Check className="ml-1 hidden size-[24px] shrink-0 text-[#2752f4] md:block" />
-                <button
-                  onClick={() => setDeleteTarget({ id: file.id as number, name: file.original_name })}
-                  className="ml-1 shrink-0 rounded-md p-1 text-[#6c7275] transition-colors hover:bg-[#f3f5f7] hover:text-red-500"
-                  title="Delete"
-                >
-                  <Trash2 className="size-[18px]" />
-                </button>
-              </>
-            ) : null}
-          </div>
+            file={file}
+            snippet={snippets[file.id as number]}
+            renameValue={renameTarget?.id === file.id ? renameValue : null}
+            onRenameValueChange={setRenameValue}
+            onRenameSubmit={(fullName) => { if (renameTarget) onRenameFile?.(renameTarget.id, fullName); setRenameTarget(null) }}
+            onRenameCancel={() => setRenameTarget(null)}
+            onStartRename={(name) => { setRenameTarget({ id: file.id as number, name: file.original_name }); setRenameValue(name) }}
+            onOpen={openFile}
+            onDelete={() => setDeleteTarget({ id: file.id as number, name: file.original_name })}
+          />
         ))}
       </div>
 
